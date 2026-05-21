@@ -7,7 +7,7 @@ description: Use when the user wants to fetch international news with GNews API,
 
 Use this skill for the news automation pipeline that combines **GNews API** (free, global 80K+ sources) and `lark-cli`.
 
-GNews API Key: `ebc3f32f8ed3f49c5a25ac145cb55ed7`
+GNews API Key: read from `GNEWS_API_KEY` or pass `-ApiKey` to `scripts/fetch-gnews.ps1`.
 Free tier: 100 requests/day, max 10 articles per request.
 
 Default target:
@@ -26,12 +26,12 @@ Default target:
 > - 旅游/美食 content is inherently harder to score → use adaptive threshold (≥18 for these categories)
 > - Keywords must be diverse — overlapping terms cause 429 to hit harder on popular queries
 
-1. Confirm GNews API key is valid:
+1. Confirm the request plan and GNews API key:
    ```powershell
-   $response = Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=general&lang=en&max=1&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
-   $response.totalArticles
+   $env:GNEWS_API_KEY = "your-gnews-api-key"
+   .\scripts\fetch-gnews.ps1 -DryRun
    ```
-2. For each category, fetch news using multiple requests. **Stagger requests across categories** to avoid 429:
+2. For each category, fetch news using multiple requests with `scripts/fetch-gnews.ps1`. **Stagger requests across categories** to avoid 429:
    - Run 1 request per category in round-robin (not all requests for one category at once)
    - Always wait 8-10 seconds between requests (increased from 6s to reduce 429)
    - See `references/category-rules.md` for full optimized rules:
@@ -111,19 +111,19 @@ Default target:
    Example PowerShell:
    ```powershell
    # 科技AI - headlines
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=10&from=<FROM>&to=<TO>&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
+   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
 
    # 科技AI - search AI
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=artificial intelligence OR AI&lang=en&max=10&from=<FROM>&to=<TO>&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
+   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=artificial intelligence OR AI&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
 
    # 娱乐体育 - headlines entertainment
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=entertainment&lang=en&max=10&from=<FROM>&to=<TO>&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
+   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=entertainment&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
 
    # 娱乐体育 - headlines sports
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=sports&lang=en&max=10&from=<FROM>&to=<TO>&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
+   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=sports&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
 
    # 旅游 - search
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=travel OR tourism&lang=en&max=10&from=<FROM>&to=<TO>&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
+   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=travel OR tourism&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
    ```
 
    **Time window parameters**:
@@ -153,7 +153,7 @@ Default target:
    - If a category has fewer than 25 passed items, trigger the **backup search** for that category (1 extra request, 10 more candidates), then re-score and re-rank.
    - If still under 25 after backup, write all passed items and note the shortfall in the output summary.
    - Do NOT trigger more than 1 backup request per category.
-7. For selected items ONLY, **generate AI-written English content**:
+7. For selected items ONLY, **generate English publication content**:
    > ⚠️ **CRITICAL**: Both "优化后标题" and "优化后正文" must be **AI-generated from scratch**, NOT copied from the original GNews fields.
    >
    > ❌ Wrong title: `Up to 200 staff...` (copied from GNews `title`)
@@ -163,6 +163,7 @@ Default target:
    > ✅ Correct body: A complete, readable English news article (600-1000 characters) that tells the full story
 
    **Content generation rules**:
+   - When running as an agent, generate the title/body with model judgment. The local `scripts/score-and-generate.ps1` fallback creates deterministic publication drafts from the available GNews fields, and should be reviewed before publishing.
    - Read the source article's `title` + `description` + `content` (strip `[+N chars]` suffix)
    - **优化后标题**: Generate a **new, complete English headline** that captures the core story. Do NOT copy the original GNews `title`.
      - Must be a proper headline (not truncated like GNews titles often are)
@@ -184,7 +185,7 @@ Default target:
    | `优化后标题` | **AI-generated English headline** | ✅ **YES — rewrite from scratch** |
    | `优化后正文` | **AI-generated English news article** | ✅ **YES — rewrite from scratch** |
    | `文生图提示词` | AI-generated image prompt | ✅ YES |
-8. Write records to Feishu Base with `scripts/write_lark_records.ps1`.
+8. Write records to Feishu Base with `scripts/write_lark_records.ps1`, or run the full sequence with `scripts/run_pipeline.ps1`.
 9. Mark failed or rejected items as `失败` only when the user wants audit rows; otherwise skip them.
 
 ## Staggered Request Strategy (Avoid 429)
@@ -251,7 +252,7 @@ Two separate fields exist -- do NOT conflate them:
 
 | Field | Content | Example |
 |---|---|---|
-| **# AI评分** | Total score number ONLY | `24` |
+| **AI评分** | Total score number ONLY | `24` |
 | **AI评价内容** | Detailed breakdown + reason | `"相关性8，新颖性8，完整度8。通过原因：..."` |
 
 - `AI评分` must be a plain integer (e.g., `20`, `24`, `27`)
@@ -259,7 +260,22 @@ Two separate fields exist -- do NOT conflate them:
 
 ## Writing To Lark Base
 
-Use `lark-cli base +record-batch-create` through the bundled script:
+Use the pipeline script for the normal path. It fetches, scores/generates, then creates a Lark dry-run payload unless `-Publish` is provided:
+
+```powershell
+.\scripts\run_pipeline.ps1
+.\scripts\run_pipeline.ps1 -Publish
+```
+
+Use individual scripts when debugging:
+
+```powershell
+.\scripts\fetch-gnews.ps1 -DryRun
+.\scripts\fetch-gnews.ps1
+.\scripts\score-and-generate.ps1 -InputJson .\processed\filtered_articles.json -OutputJson .\records.normalized.json
+```
+
+Use `lark-cli base +record-batch-create` through the bundled write script:
 
 ```powershell
 .\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json

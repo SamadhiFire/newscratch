@@ -4,7 +4,7 @@ Automated international news pipeline that fetches, filters, scores, and publish
 
 ## Overview
 
-NewsCatch pulls news from GNews API, filters articles from the past 7 days, scores them by relevance/novelty/completeness, generates Chinese summaries with image prompts, and writes everything to a configured Lark Base table.
+NewsCatch pulls news from GNews API, filters articles from the past 7 days, scores them by relevance/novelty/completeness, generates English publication drafts with image prompts, and writes everything to a configured Lark Base table.
 
 **Weekly output**: 100 articles (25 per category)
 
@@ -23,7 +23,7 @@ NewsCatch pulls news from GNews API, filters articles from the past 7 days, scor
 2. **Pre-filter** — Remove duplicates, clickbait, expired articles, blacklisted sources
 3. **Score** — Rate each article: relevance (0-10) + novelty (0-10) + completeness (0-10)
 4. **Select** — Keep top 25 per category (**adaptive threshold**: 科技AI/娱乐体育 >= 20; 旅游/美食 >= 18)
-5. **Generate** — English title, English body (600-800 chars), image prompt (16:9)
+5. **Generate** — English title, English body (600-1000 chars), image prompt (16:9)
 6. **Publish** — Write records to Lark Base via `lark-cli`
 
 ## Scoring Threshold (Adaptive)
@@ -49,13 +49,19 @@ Excluded sources: TMZ, Crypto/Bet/Gambling/Casino/Forex-related sources.
 ## Quick Start
 
 ```powershell
-# Install dependencies
-npm install
+# Configure GNews credentials for this shell
+$env:GNEWS_API_KEY = "your-gnews-api-key"
 
-# Configure Lark credentials
-lark-cli auth login
+# Check the request plan without consuming GNews quota
+.\scripts\fetch-gnews.ps1 -DryRun
 
-# Run the pipeline
+# Fetch, score, generate records, and build a Lark dry-run payload
+.\scripts\run_pipeline.ps1
+
+# Publish to Lark Base after checking records.normalized.json
+.\scripts\run_pipeline.ps1 -Publish
+
+# Or write an existing normalized file only
 .\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json
 ```
 
@@ -65,7 +71,7 @@ Target Lark Base:
 - Base Token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`
 - Table ID: `tblIDJ3Nv9Q2roXL`
 
-GNews API Key: `ebc3f32f8ed3f49c5a25ac145cb55ed7`
+GNews API Key: set `GNEWS_API_KEY` or pass `-ApiKey` to `scripts/fetch-gnews.ps1`.
 
 ## Project Structure
 
@@ -83,3 +89,4 @@ GNews API Key: `ebc3f32f8ed3f49c5a25ac145cb55ed7`
 - Backup search (1 extra request per category) triggers when fewer than 25 articles pass scoring
 - NewsCatch search queries use moderately broad phrases — very specific terms return 0 results
 - **Optimization (2026-05-21)**: 旅游/美食 increased from 5→8 requests; adaptive scoring threshold (18 vs 20); round-robin request staggering to avoid 429
+- `run_pipeline.ps1` publishes only when `-Publish` is provided; otherwise it creates a dry-run Lark payload.

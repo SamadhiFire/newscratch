@@ -1,7 +1,8 @@
-# Runtime data — regenerate on each run
+# Runtime data - regenerate on each run
 data/
 processed/
 lark-batch-create.json
+records.normalized.json
 
 # OS files
 .DS_Store
@@ -12,3 +13,7 @@ Thumbs.db
 *.swo
 .vscode/
 .idea/
+
+# Python cache
+__pycache__/
+*.pyc

@@ -80,9 +80,32 @@ foreach ($record in $records) {
     throw "Missing imagePrompt for URL $($record.sourceUrl)"
   }
 
+  if (-not $record.generatedBy -or ([string]$record.generatedBy).ToLowerInvariant() -ne "model") {
+    throw "Missing generatedBy=`"model`" for URL $($record.sourceUrl). Final title/body/imagePrompt must be created by the model, not by a script template."
+  }
+
+  $generatedTitle = [string]$record.generatedTitle
+  $body = [string]$record.body
+  if ($generatedTitle.Length -gt 90) {
+    throw "generatedTitle is too long ($($generatedTitle.Length) chars) for URL $($record.sourceUrl). Keep it under 90 characters."
+  }
+  if ($generatedTitle -match "(\.\.\.|\u2026)$") {
+    throw "generatedTitle looks truncated for URL $($record.sourceUrl). Rewrite it as a complete headline."
+  }
+  if ($body.Length -lt 600 -or $body.Length -gt 1000) {
+    throw "body must be 600-1000 characters for URL $($record.sourceUrl). Current length: $($body.Length)."
+  }
+  if ($body -match "(?i)^\s*(A report from|According to the source|This story fits)\b") {
+    throw "body starts like an internal summary for URL $($record.sourceUrl). Rewrite it as a formal news article."
+  }
+  if ($body -match "\[\+?\d+\s+chars\]") {
+    throw "body still contains a GNews truncation suffix for URL $($record.sourceUrl). Remove it and rewrite the article."
+  }
+
   $publishedAt = if ($record.publishedAt) { [string]$record.publishedAt } else { Get-Date -Format "yyyy-MM-dd HH:mm:ss" }
-  $status = if ($record.status) { [string]$record.status } else { $defaultStatus }
-  $publishStatus = if ($record.publishStatus) { [string]$record.publishStatus } else { $defaultPublishStatus }
+  # Keep select fields stable across PowerShell/CLI encodings; user JSON only supplies content fields.
+  $status = $defaultStatus
+  $publishStatus = $defaultPublishStatus
   $sourceTitle = if ($record.sourceTitle) { [string]$record.sourceTitle } else { [string]$record.generatedTitle }
   $sourceBody = if ($record.sourceBody) { [string]$record.sourceBody } elseif ($record.sourceContent) { [string]$record.sourceContent } else { [string]$record.body }
   $score = if ($null -ne $record.score) { [int]$record.score } else { 0 }
@@ -97,8 +120,8 @@ foreach ($record in $records) {
     $status,
     $score,
     $evaluation,
-    [string]$record.generatedTitle,
-    [string]$record.body,
+    $generatedTitle,
+    $body,
     [string]$record.imagePrompt,
     $publishStatus
   )
@@ -117,6 +140,11 @@ if ($outputParent -and -not (Test-Path -LiteralPath $outputParent)) {
 
 $json = $payload | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($outputPath, $json, [System.Text.UTF8Encoding]::new($false))
+$jsonArgPath = Resolve-Path -LiteralPath $outputPath -Relative
+$jsonArgPath = $jsonArgPath -replace "\\", "/"
+if (-not $jsonArgPath.StartsWith("./") -and -not $jsonArgPath.StartsWith("../")) {
+  $jsonArgPath = "./$jsonArgPath"
+}
 
 if ($DryRun) {
   Write-Host "Dry run. Payload written to $outputPath"
@@ -124,6 +152,9 @@ if ($DryRun) {
   exit 0
 }
 
+# Resolve lark-cli path: on Windows, lark-cli may be a POSIX shell script that
+# PowerShell cannot invoke directly. Fall back to node + @larksuite/cli run.js.
+# Also clear NODE_OPTIONS (e.g. --use-system-ca set by sandbox) which can crash node.
 if (-not $LarkCli -or -not (Test-Path -LiteralPath $LarkCli)) {
   $resolved = Get-Command lark-cli -ErrorAction SilentlyContinue
   if ($null -eq $resolved) {
@@ -132,4 +163,62 @@ if (-not $LarkCli -or -not (Test-Path -LiteralPath $LarkCli)) {
   $LarkCli = $resolved.Source
 }
 
-& $LarkCli base +record-batch-create --base-token $BaseToken --table-id $TableId --as user --json "@$outputPath"
+$useNodeWrapper = $false
+$nodeExe = $null
+$runJs = $null
+if ($env:OS -eq "Windows_NT") {
+  $cliItem = Get-Item -LiteralPath $LarkCli -ErrorAction SilentlyContinue
+  if ($cliItem -and (-not $cliItem.Extension -or $cliItem.Extension -eq ".sh")) {
+    $cliDir = Split-Path -Parent $cliItem.FullName
+    $runJs = Join-Path $cliDir "node_modules/@larksuite/cli/scripts/run.js"
+    $nodeExe = Join-Path $cliDir "node.exe"
+    if (-not (Test-Path -LiteralPath $nodeExe)) {
+      $nodeResolved = Get-Command node -ErrorAction SilentlyContinue
+      if ($nodeResolved) { $nodeExe = $nodeResolved.Source }
+    }
+    if ($nodeExe -and $runJs -and (Test-Path -LiteralPath $runJs)) {
+      $useNodeWrapper = $true
+    }
+  }
+}
+
+# Build the CLI arguments as a string for Start-Process / cmd /c fallback
+$cliArgs = "base +record-batch-create --base-token $BaseToken --table-id $TableId --as user --json ""@$jsonArgPath"""
+
+$savedNodeOptions = $env:NODE_OPTIONS
+$env:NODE_OPTIONS = ""
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  if ($useNodeWrapper) {
+    $proc = Start-Process -FilePath $nodeExe -ArgumentList "$runJs $cliArgs" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\lark-cli-stdout.txt" -RedirectStandardError "$env:TEMP\lark-cli-stderr.txt"
+    $exitCode = $proc.ExitCode
+    $cliOutput = @()
+    if (Test-Path "$env:TEMP\lark-cli-stdout.txt") { $cliOutput += Get-Content "$env:TEMP\lark-cli-stdout.txt" -Raw }
+    if (Test-Path "$env:TEMP\lark-cli-stderr.txt") { $cliOutput += Get-Content "$env:TEMP\lark-cli-stderr.txt" -Raw }
+  } else {
+    $cliOutput = & $LarkCli $cliArgs.Split(" ") 2>&1
+    $exitCode = $LASTEXITCODE
+  }
+} finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($null -ne $savedNodeOptions) { $env:NODE_OPTIONS = $savedNodeOptions } else { Remove-Item Env:\NODE_OPTIONS -ErrorAction SilentlyContinue }
+}
+$cliText = ($cliOutput | Out-String).Trim()
+if ($cliText) {
+  Write-Output $cliText
+}
+
+if ($exitCode -ne 0) {
+  throw "lark-cli failed with exit code $exitCode."
+}
+
+try {
+  $cliJson = $cliText | ConvertFrom-Json
+  if ($cliJson.PSObject.Properties["ok"] -and -not $cliJson.ok) {
+    $message = if ($cliJson.error.message) { $cliJson.error.message } else { "lark-cli returned ok=false." }
+    throw $message
+  }
+} catch [System.ArgumentException] {
+  # Non-JSON output is acceptable as long as lark-cli exited successfully.
+}

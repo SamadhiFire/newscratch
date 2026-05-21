@@ -4,6 +4,9 @@ processed/
 lark-batch-create.json
 records.normalized.json
 
+# WorkBuddy internal data
+.workbuddy/
+
 # OS files
 .DS_Store
 Thumbs.db

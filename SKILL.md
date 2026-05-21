@@ -1,307 +1,169 @@
 ---
 name: gnews-to-lark-base
-description: Use when the user wants to fetch international news with GNews API, filter news from the previous 7 days, generate scored English article content and image prompts, and write records into the configured Feishu/Lark Base table using lark-cli. Weekly task producing 25 articles per category (100 total).
+description: "Use when the user wants to fetch international news with GNews API, filter and score the previous 7 days of articles, use the model to rewrite selected items into publishable English headlines/bodies/image prompts, and write finished records into the configured Feishu/Lark Base table with lark-cli. Weekly target is 25 articles per category, 100 total."
 ---
 
 # GNews To Lark Base
 
-Use this skill for the news automation pipeline that combines **GNews API** (free, global 80K+ sources) and `lark-cli`.
+Use this skill for the NewsCatch pipeline: GNews fetch -> deterministic filtering/scoring -> model-written publication copy -> Feishu/Lark Base write.
 
-GNews API Key: read from `GNEWS_API_KEY` or pass `-ApiKey` to `scripts/fetch-gnews.ps1`.
-Free tier: 100 requests/day, max 10 articles per request.
+Important boundary: scripts do **not** write the final optimized title/body. The model must generate `generatedTitle`, `body`, and `imagePrompt` from the selected source material. Scripts only handle repeatable plumbing: API calls, rate limits, filtering, scoring, JSON shaping, and Lark writes.
 
-Default target:
+## Defaults
 
+- GNews key: never store it in this repo. Use `GNEWS_API_KEY` or pass `-ApiKey`.
+- Lark CLI: use `lark-cli` on `PATH` or set `LARK_CLI`.
 - Base token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`
 - Table id: `tblIDJ3Nv9Q2roXL`
 - View id: `vewwG9FgZu`
 - Categories: `科技AI`, `娱乐体育`, `旅游`, `美食`
-- **Fixed output**: 25 articles per category per week, 100 total
+- Weekly target: 25 articles per category, 100 total
 
-## Workflow
+## First-Time Setup
 
-> **Optimization Notes** (from 2026-05-21 run):
-> - 旅游/美食 have NO headlines category → rely entirely on search → need MORE requests (8 vs 5)
-> - GNews 429 errors spike when running multiple same-type queries consecutively → stagger requests across categories
-> - 旅游/美食 content is inherently harder to score → use adaptive threshold (≥18 for these categories)
-> - Keywords must be diverse — overlapping terms cause 429 to hit harder on popular queries
+Before running the pipeline, confirm the user has:
 
-1. Confirm the request plan and GNews API key:
-   ```powershell
-   $env:GNEWS_API_KEY = "your-gnews-api-key"
-   .\scripts\fetch-gnews.ps1 -DryRun
-   ```
-2. For each category, fetch news using multiple requests with `scripts/fetch-gnews.ps1`. **Stagger requests across categories** to avoid 429:
-   - Run 1 request per category in round-robin (not all requests for one category at once)
-   - Always wait 8-10 seconds between requests (increased from 6s to reduce 429)
-   - See `references/category-rules.md` for full optimized rules:
+1. Installed [larksuite/cli](https://github.com/larksuite/cli), logged in, and obtained write access to the target Base.
+2. Created a free GNews API key at [gnews.io](https://gnews.io/).
 
-   ### 科技AI — 7 requests (70 candidates)
+Then run:
 
-   | # | Type | Query | max |
-   |---|------|-------|-----|
-   | 1 | headlines | `category=technology` | 10 |
-   | 2 | search | `artificial intelligence OR AI` | 10 |
-   | 3 | search | `AI startup OR tech company` | 10 |
-   | 4 | search | `chip OR semiconductor OR smartphone` | 10 |
-   | 5 | search | `space OR robot OR quantum` | 10 |
-   | 6 | search | `cybersecurity OR data breach` | 10 |
-   | 7 | search | `software OR app OR cloud` | 10 |
-   | 🔧 backup | search | `electric vehicle OR battery OR self-driving` | 10 |
-
-   ### 娱乐体育 — 8 requests (80 candidates)
-
-   | # | Type | Query | max |
-   |---|------|-------|-----|
-   | 1 | headlines | `category=entertainment` | 10 |
-   | 2 | headlines | `category=sports` | 10 |
-   | 3 | search | `celebrity OR star OR gossip` | 10 |
-   | 4 | search | `movie OR film OR box office` | 10 |
-   | 5 | search | `music OR concert OR album` | 10 |
-   | 6 | search | `football OR soccer` | 10 |
-   | 7 | search | `basketball OR NBA` | 10 |
-   | 8 | search | `tennis OR golf OR Olympics OR racing` | 10 |
-   | 🔧 backup | search | `video game OR e-sports OR streaming` | 10 |
-
-   ### 旅游 — **8 requests (80 candidates)** ← Optimized from 5
-
-   > No headlines category available. Use diverse, specific keywords to avoid 429 concentration.
-
-   | # | Type | Query | max |
-   |---|------|-------|-----|
-   | 1 | search | `solo travel OR backpacking` | 10 |
-   | 2 | search | `airport OR flight delay OR airline` | 10 |
-   | 3 | search | `hotel OR resort OR accommodation` | 10 |
-   | 4 | search | `tourist destination OR travel guide` | 10 |
-   | 5 | search | `budget travel OR luxury travel` | 10 |
-   | 6 | search | `digital nomad OR remote work travel` | 10 |
-   | 7 | search | `cruise ship OR travel deal` | 10 |
-   | 8 | search | `national park OR adventure travel` | 10 |
-   | 🔧 backup | search | `visa OR passport OR travel policy` | 10 |
-
-   ### 美食 — **8 requests (80 candidates)** ← Optimized from 5
-
-   > No headlines category available. Use diverse keywords for coverage.
-
-   | # | Type | Query | max |
-   |---|------|-------|-----|
-   | 1 | search | `fine dining OR restaurant review` | 10 |
-   | 2 | search | `street food OR local cuisine` | 10 |
-   | 3 | search | `michelin star OR food award` | 10 |
-   | 4 | search | `coffee shop OR bakery OR cafe` | 10 |
-   | 5 | search | `food trend OR healthy diet` | 10 |
-   | 6 | search | `wine tasting OR craft beer` | 10 |
-   | 7 | search | `cooking class OR food recipe` | 10 |
-   | 8 | search | `food festival OR food market` | 10 |
-   | 🔧 backup | search | `dessert OR vegan food OR organic` | 10 |
-
-   **Total: 31 requests per run (310 candidates), plus up to 4 backup requests.**
-
-   > **Why 31 requests?**
-   > - 科技AI/娱乐体育 have dedicated headlines categories (1-2 requests each)
-   > - 旅游/美食 have NO headlines → need more search queries to compensate
-   > - The extra 6 requests for 旅游/美食 reduce 429 concentration on any single query type
-
-   **Important keyword rules for GNews search**:
-   - GNews search engine is NOT like Google Search. Overly narrow queries (e.g. `AI tools OR ChatGPT OR LLM launch`) return **0 results**.
-   - Use **moderately broad, natural phrases** that GNews can match: `artificial intelligence`, `sports`, `travel OR tourism`.
-   - Combine 2-4 terms with `OR`. Do NOT use 5+ terms or very specific product names.
-   - Test new keywords with `max=1` first if unsure.
-
-   Example PowerShell:
-   ```powershell
-   # 科技AI - headlines
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
-
-   # 科技AI - search AI
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=artificial intelligence OR AI&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
-
-   # 娱乐体育 - headlines entertainment
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=entertainment&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
-
-   # 娱乐体育 - headlines sports
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=sports&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
-
-   # 旅游 - search
-   Invoke-RestMethod -Uri "https://gnews.io/api/v4/search?q=travel OR tourism&lang=en&max=10&from=<FROM>&to=<TO>&apikey=$env:GNEWS_API_KEY"
-   ```
-
-   **Time window parameters**:
-   - Set `from` to **7 days ago** and `to` to **now** (ISO 8601 format, e.g. `2026-05-14T09:30:00Z`)
-   - This is a weekly task; the previous 7 days of news are in scope
-   - All requests use `max=10`
-
-3. **Quick pre-filter** (before scoring): Immediately discard items that:
-   - Have empty, generic, or clickbait titles (e.g., "You won't believe...", "Breaking:")
-   - Have `description` shorter than 50 characters (too little info to evaluate)
-   - Come from sources in the **source blacklist** (see below)
-   - Have duplicate URLs or very similar titles (>80% text overlap) with already-seen items
-   - **Published more than 7 days ago** (double-check in case GNews returns stale items)
-4. **Relevance pre-check**: For each remaining item, do a fast relevance check based on title + description ONLY (do not fetch full article yet):
-   - Does the title clearly relate to one of the 4 target categories?
-   - Is there enough substance (not just a headline/teaser)?
-   - Discard items that clearly do not fit any category.
-5. Score each remaining item:
-   - relevance 0-10
-   - novelty 0-10
-   - completeness 0-10
-   - **Total score** = sum of above three dimensions
-   - **Pass threshold** (adaptive per category):
-     - 科技AI / 娱乐体育: **>= 20**
-     - 旅游 / 美食: **>= 18** (lower — these categories have inherently lower content density without headlines category)
-6. **Select top 25 per category**: For each category, sort all passed items by total score (descending), take the top 25.
-   - If a category has fewer than 25 passed items, trigger the **backup search** for that category (1 extra request, 10 more candidates), then re-score and re-rank.
-   - If still under 25 after backup, write all passed items and note the shortfall in the output summary.
-   - Do NOT trigger more than 1 backup request per category.
-7. For selected items ONLY, **generate English publication content**:
-   > ⚠️ **CRITICAL**: Both "优化后标题" and "优化后正文" must be **AI-generated from scratch**, NOT copied from the original GNews fields.
-   >
-   > ❌ Wrong title: `Up to 200 staff...` (copied from GNews `title`)
-   > ✅ Correct title: `Iris Energy to Add 1.4GW in Pennsylvania for AI Data Centers` (rewritten to be complete and informative)
-   >
-   > ❌ Wrong body: `GitHub says hackers stole data... [+1433 chars]` (raw GNews snippet)
-   > ✅ Correct body: A complete, readable English news article (600-1000 characters) that tells the full story
-
-   **Content generation rules**:
-   - When running as an agent, generate the title/body with model judgment. The local `scripts/score-and-generate.ps1` fallback creates deterministic publication drafts from the available GNews fields, and should be reviewed before publishing.
-   - Read the source article's `title` + `description` + `content` (strip `[+N chars]` suffix)
-   - **优化后标题**: Generate a **new, complete English headline** that captures the core story. Do NOT copy the original GNews `title`.
-     - Must be a proper headline (not truncated like GNews titles often are)
-     - Length: 80-150 characters
-     - Example: Original `Star Health w...` → Generated `Star Health Plans 65% Revenue from Tier-2 and Tier-3 Cities by 2030`
-   - **优化后正文**: Write a **complete English news article** in professional journalistic style
-     - Must be readable as a standalone piece (someone can understand the story without clicking the source link)
-     - Length: **600-1000 characters** (not words — characters including spaces)
-     - Structure: Lead paragraph (who/what/when) → body detail → context/closing
-     - Do NOT copy-paste GNews content directly
-     - Do NOT include the `[+N chars]` suffix
-   - image prompt, 16:9 cover, no text/watermark
-
-   **Field mapping**:
-   | Field | Source | Must be AI-generated? |
-   |-------|--------|----------------------|
-   | `新闻标题` | Original GNews `title` | ❌ Keep original |
-   | `新闻正文` | Original GNews `content` | ❌ Keep original (for reference) |
-   | `优化后标题` | **AI-generated English headline** | ✅ **YES — rewrite from scratch** |
-   | `优化后正文` | **AI-generated English news article** | ✅ **YES — rewrite from scratch** |
-   | `文生图提示词` | AI-generated image prompt | ✅ YES |
-8. Write records to Feishu Base with `scripts/write_lark_records.ps1`, or run the full sequence with `scripts/run_pipeline.ps1`.
-9. Mark failed or rejected items as `失败` only when the user wants audit rows; otherwise skip them.
-
-## Staggered Request Strategy (Avoid 429)
-
-**Critical optimization**: Running all requests for one category consecutively triggers 429 faster.
-
-**Round-robin fetching** (execute in this order, 8-10s gap between each):
-
-```
-Request  1: 科技AI R1 (headlines)
-Request  2: 娱乐体育 R1 (headlines entertainment)
-Request  3: 娱乐体育 R2 (headlines sports)
-Request  4: 旅游 R1
-Request  5: 美食 R1
-Request  6: 科技AI R2
-Request  7: 娱乐体育 R3
-Request  8: 旅游 R2
-Request  9: 美食 R2
-... (continue alternating across categories)
+```powershell
+.\scripts\setup.ps1
 ```
 
-This spreads same-keyword queries across time, dramatically reducing 429 hits.
+The setup helper can save `GNEWS_API_KEY` and `LARK_CLI` to the user's local environment variables. Those values stay on that machine and are not committed to GitHub.
 
-**Why this works**: GNews 429 is triggered by request rate per-keyword. Spacing them out lets the rate limiter cool down.
+## Normal Workflow
 
-## API Rate Limiting & Retry
-
-GNews free tier has strict rate limits. Follow these rules:
-
-- **Wait 8-10 seconds between consecutive API requests** (increased from 6s).
-- With 31 requests + 4 backup per run, full run takes ~6-8 minutes minimum.
-- **429 handling** (adaptive retry):
-  1. Wait 30 seconds (`Start-Sleep -Seconds 30`)
-  2. Retry the same request **once**
-  3. If 429 again, skip that request and log the failure
-  4. **Do NOT retry the same query** — move to next request instead
-  5. Count skipped requests toward daily quota for tracking
-- **Do NOT remove `country` parameter** — but prefer omitting it or using multiple countries in rotation rather than always `country=us`
-
-## Source Rules
-
-Read `references/category-rules.md` before deciding keywords or source filters.
-
-The hard time window is **previous 7 days** relative to the trigger time. Both the API `from` parameter and step 3 pre-filter enforce this 7-day window.
-
-When calling GNews API, always include date range (`from`/`to` parameters). GNews returns standard JSON with fields: `title`, `description`, `content`, `url`, `image`, `publishedAt`, `source.name`.
-
-**⚠️ Content field caveat**: GNews `content` is truncated for free tier users and ends with `[+N chars]` (e.g. `...release date. [+5122 chars]`). Always strip this suffix via regex before using the content. The actual usable content may be as short as 200-300 characters; fall back to `description` when `content` is too short.
-
-### Source Blacklist
-
-Always reject articles from these sources:
-
-- `TMZ` (privacy-violating paparazzi content, legal risk)
-- Any source whose `source.name` contains words like: `Crypto`, `Bet`, `Gambling`, `Casino`, `Forex`, `DraftKings`, `Polymarket`
-
-**Note**: Newsweek, Fox News, and Daily Mail are **NOT** blacklisted. Gossip and entertainment content is welcome for the 娱乐体育 category. Only reject sources that are pure gambling/crypto spam or paparazzi with legal risk.
-
-This list can be extended by the user at any time.
-
-## Scoring & Field Mapping
-
-Two separate fields exist -- do NOT conflate them:
-
-| Field | Content | Example |
-|---|---|---|
-| **AI评分** | Total score number ONLY | `24` |
-| **AI评价内容** | Detailed breakdown + reason | `"相关性8，新颖性8，完整度8。通过原因：..."` |
-
-- `AI评分` must be a plain integer (e.g., `20`, `24`, `27`)
-- `AI评价内容` holds the full text with per-dimension scores and reasoning
-
-## Writing To Lark Base
-
-Use the pipeline script for the normal path. It fetches, scores/generates, then creates a Lark dry-run payload unless `-Publish` is provided:
+1. Fetch and pre-filter GNews articles:
 
 ```powershell
 .\scripts\run_pipeline.ps1
-.\scripts\run_pipeline.ps1 -Publish
 ```
 
-Use individual scripts when debugging:
+This creates:
+
+- `processed/raw_gnews.json`
+- `processed/filtered_articles.json`
+- `processed/generation-input.json`
+- `processed/fetch-summary.json`
+- `processed/score-summary.json`
+
+2. Use the model to create `records.normalized.json` from `processed/generation-input.json`.
+
+Read `references/base-schema.md` before generating the normalized output. For every selected item, preserve source facts and create these fields:
+
+- `generatedTitle`: rewritten English headline, 45-90 characters, complete and not truncated.
+- `body`: formal English news article, 600-1000 characters, readable as a standalone article.
+- `imagePrompt`: 16:9 editorial cover prompt, no text, no watermark, no logo.
+- `generatedBy`: exactly `model`, so the writer can reject old script/template artifacts.
+
+Do not publish template prose. Do not start bodies with `A report from`, `According to the source`, or `This story fits`. The article should read like a formal news article for readers, not like an internal summary of GNews metadata.
+
+3. Dry-run the Lark payload:
 
 ```powershell
-.\scripts\fetch-gnews.ps1 -DryRun
-.\scripts\fetch-gnews.ps1
-.\scripts\score-and-generate.ps1 -InputJson .\processed\filtered_articles.json -OutputJson .\records.normalized.json
+.\scripts\run_pipeline.ps1 -WriteExistingRecords
 ```
 
-Use `lark-cli base +record-batch-create` through the bundled write script:
+4. Publish only after reviewing `records.normalized.json` and `lark-batch-create.json`:
 
 ```powershell
-.\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json
+.\scripts\run_pipeline.ps1 -WriteExistingRecords -Publish
 ```
 
-Use `-DryRun` first when changing mappings:
+You can also call the writer directly:
 
 ```powershell
 .\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json -DryRun
+.\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json
 ```
 
-If sandbox or keychain access blocks `lark-cli`, rerun the command with escalation.
+## Script Responsibilities
 
-## Output Contract
+- `scripts/setup.ps1`: first-time environment setup and dry-run plan check.
+- `scripts/fetch-gnews.ps1`: GNews API calls, 7-day window, round-robin category staggering, retry handling, dedupe, blacklist, and filtered output.
+- `scripts/score-and-select.ps1`: deterministic scoring and top-25 selection. It outputs `processed/generation-input.json` for the model.
+- `scripts/score-and-generate.ps1`: deprecated compatibility wrapper. It does not generate final copy.
+- `scripts/write_lark_records.ps1`: validates `records.normalized.json`, builds Lark batch payload, and writes to Base.
+- `scripts/run_pipeline.ps1`: orchestrates fetch/select, or writes an already generated records file when `-WriteExistingRecords` is set.
 
-For each run, summarize:
+## Request Strategy
 
-- **429 impact**: number of 429 errors per category, which requests were skipped
-- number of GNews candidates fetched per category
-- number kept after pre-filter (dedup + blacklist + 7-day)
-- number passed adaptive score threshold
-- number selected (top 25 or fewer)
-- number written to Feishu Base
-- any categories with shortfall (< 25 articles)
-- any API or permission failures
-- total API requests consumed vs daily quota (100/day)
-- **recommendation**: whether date range should be extended for 旅游/美食 next run
+Read `references/category-rules.md` before changing keywords or thresholds.
 
-Do not claim images are attached unless an image generation step and attachment upload have actually run.
+- Time window: previous 7 days.
+- Free tier: 100 GNews requests/day, max 10 articles/request.
+- Default run: 31 requests plus up to 4 backup requests.
+- Use round-robin category staggering and wait 8-10 seconds between requests.
+- On HTTP 429: wait 30 seconds, retry once, then skip that request and record the failure.
+- Include backup searches by default; use `-SkipBackup` only to save quota.
+
+## Filtering And Scoring
+
+Quick pre-filter removes:
+
+- Empty, generic, or clickbait titles.
+- Descriptions shorter than 50 characters.
+- Duplicate URLs or near-duplicate titles.
+- Sources older than 7 days.
+- Blacklisted sources: `TMZ`, and sources containing `Crypto`, `Bet`, `Gambling`, `Casino`, `Forex`, `DraftKings`, or `Polymarket`.
+
+Scoring uses:
+
+- Relevance: 0-10
+- Novelty: 0-10
+- Completeness: 0-10
+
+Adaptive pass thresholds:
+
+- `科技AI`: >= 20
+- `娱乐体育`: >= 20
+- `旅游`: >= 18
+- `美食`: >= 18
+
+Select the top 25 passed items per category. If fewer than 25 pass, run one backup search for that category and note any remaining shortfall.
+
+## Model Generation Rules
+
+For each item in `processed/generation-input.json`:
+
+- Use `sourceTitle`, `sourceDescription`, `sourceBody`, `sourceName`, `publishedAt`, and `sourceUrl`.
+- Strip and ignore any GNews `[+N chars]` suffix.
+- Preserve factual accuracy. Do not invent quotes, numbers, locations, names, or outcomes that are not supported by the source fields.
+- You may add light category context only when it is generic and does not introduce new facts.
+- Rewrite the headline from scratch. Do not copy the GNews title unless the source title is already a clean publication headline and still needs no improvement.
+- Write a standalone formal English news article, not a bullet summary or source attribution sentence.
+- Keep body length between 600 and 1000 characters.
+- Generate an editorial image prompt that describes the visual scene; no text/watermarks/logos.
+
+Output must be a JSON array matching `references/base-schema.md`.
+
+## Lark Write Rules
+
+`write_lark_records.ps1` rejects records when:
+
+- `generatedTitle`, `body`, or `imagePrompt` is missing.
+- `generatedBy` is missing or is not exactly `model`.
+- `generatedTitle` is longer than 90 characters or appears truncated.
+- `body` is outside 600-1000 characters.
+- `body` starts like an internal summary (`A report from`, `According to the source`, `This story fits`).
+- `body` still contains a GNews truncation suffix.
+
+If `lark-cli` hits sandbox/keychain restrictions, rerun that command with approval/escalation.
+
+## Output Summary
+
+For each run, report:
+
+- API request count and any 429/skipped requests.
+- Candidates fetched per category.
+- Items kept after pre-filter.
+- Items passed scoring.
+- Items selected for model generation.
+- Records generated by the model.
+- Records dry-run or written to Feishu.
+- Category shortfalls and any permission/API failures.
+
+Do not claim image files are attached unless an image generation and upload step actually ran.

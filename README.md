@@ -1,92 +1,110 @@
 # NewsCatch
 
-Automated international news pipeline that fetches, filters, scores, and publishes curated content to Feishu (Lark) Base.
+NewsCatch is a Codex skill for collecting international news from GNews, selecting useful articles, using the model to rewrite them into publishable English copy, and writing the finished records to a Feishu/Lark Base table.
 
-## Overview
-
-NewsCatch pulls news from GNews API, filters articles from the past 7 days, scores them by relevance/novelty/completeness, generates English publication drafts with image prompts, and writes everything to a configured Lark Base table.
-
-**Weekly output**: 100 articles (25 per category)
+The important design point: scripts do not replace the model. They fetch, filter, score, select, validate, and write. Codex/the model rewrites the final title, body, and image prompt.
 
 ## Categories
 
-| Category | Description |
-|----------|-------------|
-| 科技AI | Technology & AI |
-| 娱乐体育 | Entertainment & Sports |
-| 旅游 | Travel |
-| 美食 | Food & Dining |
+| Category | Meaning |
+|---|---|
+| `科技AI` | Technology and AI |
+| `娱乐体育` | Entertainment and sports |
+| `旅游` | Travel |
+| `美食` | Food and dining |
+
+Weekly target: 25 articles per category, 100 total.
+
+## First-Time Setup
+
+Before running:
+
+1. Install [larksuite/cli](https://github.com/larksuite/cli), log in, and make sure your account can write to the target Feishu/Lark Base.
+2. Get a free GNews API key from [gnews.io](https://gnews.io/).
+
+Then run:
+
+```powershell
+.\scripts\setup.ps1
+```
+
+The setup script can store `GNEWS_API_KEY` and `LARK_CLI` in your local user environment variables. They stay on your own computer and are not stored in this repository.
 
 ## Workflow
 
-1. **Fetch** — Query GNews API (31 requests/week, 310 candidates, staggered round-robin to avoid 429)
-2. **Pre-filter** — Remove duplicates, clickbait, expired articles, blacklisted sources
-3. **Score** — Rate each article: relevance (0-10) + novelty (0-10) + completeness (0-10)
-4. **Select** — Keep top 25 per category (**adaptive threshold**: 科技AI/娱乐体育 >= 20; 旅游/美食 >= 18)
-5. **Generate** — English title, English body (600-1000 chars), image prompt (16:9)
-6. **Publish** — Write records to Lark Base via `lark-cli`
-
-## Scoring Threshold (Adaptive)
-
-| Category | Score Required |
-|----------|--------------|
-| 科技AI | 20+ |
-| 娱乐体育 | 20+ |
-| 旅游 | 18+ (lower — no headlines category) |
-| 美食 | 18+ (lower — no headlines category) |
-
-## API Rate Limits
-
-- GNews free tier: 100 requests/day
-- **8-10 second delay between requests** (increased from 6s to reduce 429)
-- **Round-robin stagger**: alternate requests across categories, not batch by category
-- HTTP 429 triggers 30s wait + 1 retry; if 429 again, skip and move to next
-
-## Source Blacklist
-
-Excluded sources: TMZ, Crypto/Bet/Gambling/Casino/Forex-related sources.
-
-## Quick Start
+1. Fetch, filter, score, and select articles:
 
 ```powershell
-# Configure GNews credentials for this shell
-$env:GNEWS_API_KEY = "your-gnews-api-key"
-
-# Check the request plan without consuming GNews quota
-.\scripts\fetch-gnews.ps1 -DryRun
-
-# Fetch, score, generate records, and build a Lark dry-run payload
 .\scripts\run_pipeline.ps1
-
-# Publish to Lark Base after checking records.normalized.json
-.\scripts\run_pipeline.ps1 -Publish
-
-# Or write an existing normalized file only
-.\scripts\write_lark_records.ps1 -InputJson .\records.normalized.json
 ```
+
+This creates `processed/generation-input.json`.
+
+2. Ask Codex/the model to generate `records.normalized.json` from `processed/generation-input.json`.
+
+The model must create:
+
+- `generatedTitle`: concise rewritten English headline.
+- `body`: formal English news article, 600-1000 characters.
+- `imagePrompt`: 16:9 editorial image prompt.
+- `generatedBy`: exactly `model`.
+
+3. Build and inspect the Lark payload:
+
+```powershell
+.\scripts\run_pipeline.ps1 -WriteExistingRecords
+```
+
+4. Publish after review:
+
+```powershell
+.\scripts\run_pipeline.ps1 -WriteExistingRecords -Publish
+```
+
+## Why There Is A Script
+
+The scripts handle deterministic work:
+
+- GNews API request planning and rate limiting.
+- 7-day time window.
+- Duplicate/clickbait/blacklist filtering.
+- Category scoring and top-25 selection.
+- JSON contract shaping.
+- Lark payload generation and upload.
+
+The scripts should not invent publication copy. Titles and bodies need model judgment, so they are generated after `processed/generation-input.json` is ready.
 
 ## Configuration
 
-Target Lark Base:
-- Base Token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`
-- Table ID: `tblIDJ3Nv9Q2roXL`
+Target Base:
 
-GNews API Key: set `GNEWS_API_KEY` or pass `-ApiKey` to `scripts/fetch-gnews.ps1`.
+- Base token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`
+- Table id: `tblIDJ3Nv9Q2roXL`
+- View id: `vewwG9FgZu`
 
-## Project Structure
+GNews API key is not stored in the repo. Use `GNEWS_API_KEY` or pass `-ApiKey` to `scripts/fetch-gnews.ps1`.
 
+## Files
+
+```text
+agents/                 Codex skill UI metadata
+references/             Category rules and Base schema
+scripts/                PowerShell automation scripts
+SKILL.md                Skill instructions for Codex
+README.md               Human-facing GitHub overview
+LICENSE
 ```
-├── agents/           # Agent configurations
-├── references/       # Category rules & guidelines
-├── scripts/          # Automation scripts (PowerShell)
-├── SKILL.md          # Full skill documentation
-└── LICENSE
-```
+
+Runtime output is ignored by Git:
+
+- `processed/`
+- `data/`
+- `records.normalized.json`
+- `lark-batch-create.json`
 
 ## Notes
 
-- Only news within 7 days is considered valid
-- Backup search (1 extra request per category) triggers when fewer than 25 articles pass scoring
-- NewsCatch search queries use moderately broad phrases — very specific terms return 0 results
-- **Optimization (2026-05-21)**: 旅游/美食 increased from 5→8 requests; adaptive scoring threshold (18 vs 20); round-robin request staggering to avoid 429
-- `run_pipeline.ps1` publishes only when `-Publish` is provided; otherwise it creates a dry-run Lark payload.
+- GNews free tier allows 100 requests/day.
+- Default fetch uses 31 requests, plus up to 4 backup requests.
+- Requests are staggered across categories with 8-10 seconds between calls to reduce 429 errors.
+- `旅游` and `美食` have no GNews headline category, so they rely on broader search queries and a slightly lower score threshold.

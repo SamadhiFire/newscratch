@@ -1,3 +1,3 @@
 display_name: GNews To Lark Base
-short_description: Fetch international news via GNews API, score, generate English article drafts, and write to Feishu Base.
-default_prompt: Use GNews API from the GNEWS_API_KEY environment variable to fetch the previous 7 days of international news for 科技AI, 娱乐体育, 旅游, and 美食. Score each item (relevance + novelty + completeness = total), generate English article drafts (600-1000 chars) and image prompts, and write records to the configured Feishu Base table. AI评分 field gets the total score number only; AI评价内容 gets the detailed breakdown.
+short_description: Fetch and score GNews articles, use the model to write publishable English copy, and write finished records to Feishu Base.
+default_prompt: Fetch the previous 7 days of GNews articles for 科技AI, 娱乐体育, 旅游, and 美食. Use the scripts to fetch/filter/score/select, then use the model to generate records.normalized.json with rewritten English headlines, 600-1000 character formal English news bodies, and 16:9 image prompts. Dry-run the Lark payload before publishing to the configured Feishu Base.

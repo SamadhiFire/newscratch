@@ -1,4 +1,4 @@
-# NewsCatch
+# NewsScratch
 
 NewsCatch is a Codex skill for collecting international news from GNews, selecting useful articles, using the model to rewrite them into publishable English copy, and writing the finished records to a Feishu/Lark Base table.
 

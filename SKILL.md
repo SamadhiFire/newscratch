@@ -1,6 +1,6 @@
 ---
 name: gnews-to-lark-base
-description: Use when the user wants to fetch international news with GNews API, filter news from the previous 7 days, generate scored Chinese article content and image prompts, and write records into the configured Feishu/Lark Base table using lark-cli. Weekly task producing 25 articles per category (100 total).
+description: Use when the user wants to fetch international news with GNews API, filter news from the previous 7 days, generate scored English article content and image prompts, and write records into the configured Feishu/Lark Base table using lark-cli. Weekly task producing 25 articles per category (100 total).
 ---
 
 # GNews To Lark Base
@@ -128,8 +128,8 @@ Default target:
    - If still under 25 after backup, write all passed items and note the shortfall in the output summary.
    - Do NOT trigger more than 1 backup request per category.
 7. For selected items ONLY, fetch the full article content if needed (using the `url` from GNews), then generate:
-   - Chinese title
-   - Chinese body, 600-800 Chinese characters
+   - English title
+   - English body, 600-800 characters
    - image prompt, 16:9 cover, no text/watermark
 8. Write records to Feishu Base with `scripts/write_lark_records.ps1`.
 9. Mark failed or rejected items as `失败` only when the user wants audit rows; otherwise skip them.

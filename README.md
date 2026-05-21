@@ -19,25 +19,28 @@ NewsCatch pulls news from GNews API, filters articles from the past 7 days, scor
 
 ## Workflow
 
-1. **Fetch** — Query GNews API (25 requests/week, 250 candidates)
+1. **Fetch** — Query GNews API (31 requests/week, 310 candidates, staggered round-robin to avoid 429)
 2. **Pre-filter** — Remove duplicates, clickbait, expired articles, blacklisted sources
 3. **Score** — Rate each article: relevance (0-10) + novelty (0-10) + completeness (0-10)
-4. **Select** — Keep top 25 per category (score >= 20 required)
+4. **Select** — Keep top 25 per category (**adaptive threshold**: 科技AI/娱乐体育 >= 20; 旅游/美食 >= 18)
 5. **Generate** — English title, English body (600-800 chars), image prompt (16:9)
 6. **Publish** — Write records to Lark Base via `lark-cli`
 
-## Scoring Threshold
+## Scoring Threshold (Adaptive)
 
-| Score Range | Action |
-|-------------|--------|
-| 20+ | Accepted |
-| < 20 | Rejected |
+| Category | Score Required |
+|----------|--------------|
+| 科技AI | 20+ |
+| 娱乐体育 | 20+ |
+| 旅游 | 18+ (lower — no headlines category) |
+| 美食 | 18+ (lower — no headlines category) |
 
 ## API Rate Limits
 
 - GNews free tier: 100 requests/day
-- 6-second delay between requests
-- HTTP 429 triggers 30s wait + 1 retry
+- **8-10 second delay between requests** (increased from 6s to reduce 429)
+- **Round-robin stagger**: alternate requests across categories, not batch by category
+- HTTP 429 triggers 30s wait + 1 retry; if 429 again, skip and move to next
 
 ## Source Blacklist
 
@@ -79,3 +82,4 @@ GNews API Key: `ebc3f32f8ed3f49c5a25ac145cb55ed7`
 - Only news within 7 days is considered valid
 - Backup search (1 extra request per category) triggers when fewer than 25 articles pass scoring
 - NewsCatch search queries use moderately broad phrases — very specific terms return 0 results
+- **Optimization (2026-05-21)**: 旅游/美食 increased from 5→8 requests; adaptive scoring threshold (18 vs 20); round-robin request staggering to avoid 429

@@ -1,0 +1,14 @@
+# Runtime data — regenerate on each run
+data/
+processed/
+lark-batch-create.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+.vscode/
+.idea/

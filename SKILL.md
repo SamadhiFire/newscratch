@@ -20,12 +20,21 @@ Default target:
 
 ## Workflow
 
+> **Optimization Notes** (from 2026-05-21 run):
+> - 旅游/美食 have NO headlines category → rely entirely on search → need MORE requests (8 vs 5)
+> - GNews 429 errors spike when running multiple same-type queries consecutively → stagger requests across categories
+> - 旅游/美食 content is inherently harder to score → use adaptive threshold (≥18 for these categories)
+> - Keywords must be diverse — overlapping terms cause 429 to hit harder on popular queries
+
 1. Confirm GNews API key is valid:
    ```powershell
    $response = Invoke-RestMethod -Uri "https://gnews.io/api/v4/top-headlines?category=general&lang=en&max=1&apikey=ebc3f32f8ed3f49c5a25ac145cb55ed7"
    $response.totalArticles
    ```
-2. For each category, fetch news using multiple requests. The strategy differs by category (see `references/category-rules.md` for full rules):
+2. For each category, fetch news using multiple requests. **Stagger requests across categories** to avoid 429:
+   - Run 1 request per category in round-robin (not all requests for one category at once)
+   - Always wait 8-10 seconds between requests (increased from 6s to reduce 429)
+   - See `references/category-rules.md` for full optimized rules:
 
    ### 科技AI — 7 requests (70 candidates)
 
@@ -54,29 +63,44 @@ Default target:
    | 8 | search | `tennis OR golf OR Olympics OR racing` | 10 |
    | 🔧 backup | search | `video game OR e-sports OR streaming` | 10 |
 
-   ### 旅游 — 5 requests (50 candidates)
+   ### 旅游 — **8 requests (80 candidates)** ← Optimized from 5
+
+   > No headlines category available. Use diverse, specific keywords to avoid 429 concentration.
 
    | # | Type | Query | max |
    |---|------|-------|-----|
-   | 1 | search | `travel OR tourism` | 10 |
-   | 2 | search | `airline OR flight` | 10 |
-   | 3 | search | `hotel OR resort` | 10 |
-   | 4 | search | `cruise OR vacation` | 10 |
-   | 5 | search | `destination OR tourist attraction` | 10 |
+   | 1 | search | `solo travel OR backpacking` | 10 |
+   | 2 | search | `airport OR flight delay OR airline` | 10 |
+   | 3 | search | `hotel OR resort OR accommodation` | 10 |
+   | 4 | search | `tourist destination OR travel guide` | 10 |
+   | 5 | search | `budget travel OR luxury travel` | 10 |
+   | 6 | search | `digital nomad OR remote work travel` | 10 |
+   | 7 | search | `cruise ship OR travel deal` | 10 |
+   | 8 | search | `national park OR adventure travel` | 10 |
    | 🔧 backup | search | `visa OR passport OR travel policy` | 10 |
 
-   ### 美食 — 5 requests (50 candidates)
+   ### 美食 — **8 requests (80 candidates)** ← Optimized from 5
+
+   > No headlines category available. Use diverse keywords for coverage.
 
    | # | Type | Query | max |
    |---|------|-------|-----|
-   | 1 | search | `food OR restaurant` | 10 |
-   | 2 | search | `cooking OR recipe` | 10 |
-   | 3 | search | `food trend OR diet` | 10 |
-   | 4 | search | `cuisine OR chef` | 10 |
-   | 5 | search | `wine OR coffee OR dessert` | 10 |
-   | 🔧 backup | search | `street food OR food festival` | 10 |
+   | 1 | search | `fine dining OR restaurant review` | 10 |
+   | 2 | search | `street food OR local cuisine` | 10 |
+   | 3 | search | `michelin star OR food award` | 10 |
+   | 4 | search | `coffee shop OR bakery OR cafe` | 10 |
+   | 5 | search | `food trend OR healthy diet` | 10 |
+   | 6 | search | `wine tasting OR craft beer` | 10 |
+   | 7 | search | `cooking class OR food recipe` | 10 |
+   | 8 | search | `food festival OR food market` | 10 |
+   | 🔧 backup | search | `dessert OR vegan food OR organic` | 10 |
 
-   **Total: 25 requests per run (250 candidates), plus up to 4 backup requests if needed.**
+   **Total: 31 requests per run (310 candidates), plus up to 4 backup requests.**
+
+   > **Why 31 requests?**
+   > - 科技AI/娱乐体育 have dedicated headlines categories (1-2 requests each)
+   > - 旅游/美食 have NO headlines → need more search queries to compensate
+   > - The extra 6 requests for 旅游/美食 reduce 429 concentration on any single query type
 
    **Important keyword rules for GNews search**:
    - GNews search engine is NOT like Google Search. Overly narrow queries (e.g. `AI tools OR ChatGPT OR LLM launch`) return **0 results**.
@@ -122,28 +146,82 @@ Default target:
    - novelty 0-10
    - completeness 0-10
    - **Total score** = sum of above three dimensions
-   - pass threshold: total score >= 20
+   - **Pass threshold** (adaptive per category):
+     - 科技AI / 娱乐体育: **>= 20**
+     - 旅游 / 美食: **>= 18** (lower — these categories have inherently lower content density without headlines category)
 6. **Select top 25 per category**: For each category, sort all passed items by total score (descending), take the top 25.
    - If a category has fewer than 25 passed items, trigger the **backup search** for that category (1 extra request, 10 more candidates), then re-score and re-rank.
    - If still under 25 after backup, write all passed items and note the shortfall in the output summary.
    - Do NOT trigger more than 1 backup request per category.
-7. For selected items ONLY, fetch the full article content if needed (using the `url` from GNews), then generate:
-   - English title
-   - English body, 600-800 characters
+7. For selected items ONLY, **generate AI-written English content**:
+   > ⚠️ **CRITICAL**: Both "优化后标题" and "优化后正文" must be **AI-generated from scratch**, NOT copied from the original GNews fields.
+   >
+   > ❌ Wrong title: `Up to 200 staff...` (copied from GNews `title`)
+   > ✅ Correct title: `Iris Energy to Add 1.4GW in Pennsylvania for AI Data Centers` (rewritten to be complete and informative)
+   >
+   > ❌ Wrong body: `GitHub says hackers stole data... [+1433 chars]` (raw GNews snippet)
+   > ✅ Correct body: A complete, readable English news article (600-1000 characters) that tells the full story
+
+   **Content generation rules**:
+   - Read the source article's `title` + `description` + `content` (strip `[+N chars]` suffix)
+   - **优化后标题**: Generate a **new, complete English headline** that captures the core story. Do NOT copy the original GNews `title`.
+     - Must be a proper headline (not truncated like GNews titles often are)
+     - Length: 80-150 characters
+     - Example: Original `Star Health w...` → Generated `Star Health Plans 65% Revenue from Tier-2 and Tier-3 Cities by 2030`
+   - **优化后正文**: Write a **complete English news article** in professional journalistic style
+     - Must be readable as a standalone piece (someone can understand the story without clicking the source link)
+     - Length: **600-1000 characters** (not words — characters including spaces)
+     - Structure: Lead paragraph (who/what/when) → body detail → context/closing
+     - Do NOT copy-paste GNews content directly
+     - Do NOT include the `[+N chars]` suffix
    - image prompt, 16:9 cover, no text/watermark
+
+   **Field mapping**:
+   | Field | Source | Must be AI-generated? |
+   |-------|--------|----------------------|
+   | `新闻标题` | Original GNews `title` | ❌ Keep original |
+   | `新闻正文` | Original GNews `content` | ❌ Keep original (for reference) |
+   | `优化后标题` | **AI-generated English headline** | ✅ **YES — rewrite from scratch** |
+   | `优化后正文` | **AI-generated English news article** | ✅ **YES — rewrite from scratch** |
+   | `文生图提示词` | AI-generated image prompt | ✅ YES |
 8. Write records to Feishu Base with `scripts/write_lark_records.ps1`.
 9. Mark failed or rejected items as `失败` only when the user wants audit rows; otherwise skip them.
+
+## Staggered Request Strategy (Avoid 429)
+
+**Critical optimization**: Running all requests for one category consecutively triggers 429 faster.
+
+**Round-robin fetching** (execute in this order, 8-10s gap between each):
+
+```
+Request  1: 科技AI R1 (headlines)
+Request  2: 娱乐体育 R1 (headlines entertainment)
+Request  3: 娱乐体育 R2 (headlines sports)
+Request  4: 旅游 R1
+Request  5: 美食 R1
+Request  6: 科技AI R2
+Request  7: 娱乐体育 R3
+Request  8: 旅游 R2
+Request  9: 美食 R2
+... (continue alternating across categories)
+```
+
+This spreads same-keyword queries across time, dramatically reducing 429 hits.
+
+**Why this works**: GNews 429 is triggered by request rate per-keyword. Spacing them out lets the rate limiter cool down.
 
 ## API Rate Limiting & Retry
 
 GNews free tier has strict rate limits. Follow these rules:
 
-- **Wait at least 6 seconds between consecutive API requests**. Use `Start-Sleep -Seconds 6` in PowerShell.
-- With 25 requests per run, a full run takes ~150 seconds (2.5 minutes) minimum, plus up to 4 backup requests.
-- If you receive HTTP 429 (Too Many Requests):
+- **Wait 8-10 seconds between consecutive API requests** (increased from 6s).
+- With 31 requests + 4 backup per run, full run takes ~6-8 minutes minimum.
+- **429 handling** (adaptive retry):
   1. Wait 30 seconds (`Start-Sleep -Seconds 30`)
   2. Retry the same request **once**
-  3. If 429 again, skip that request and log the failure in the output summary
+  3. If 429 again, skip that request and log the failure
+  4. **Do NOT retry the same query** — move to next request instead
+  5. Count skipped requests toward daily quota for tracking
 - **Do NOT remove `country` parameter** — but prefer omitting it or using multiple countries in rotation rather than always `country=us`
 
 ## Source Rules
@@ -153,6 +231,8 @@ Read `references/category-rules.md` before deciding keywords or source filters.
 The hard time window is **previous 7 days** relative to the trigger time. Both the API `from` parameter and step 3 pre-filter enforce this 7-day window.
 
 When calling GNews API, always include date range (`from`/`to` parameters). GNews returns standard JSON with fields: `title`, `description`, `content`, `url`, `image`, `publishedAt`, `source.name`.
+
+**⚠️ Content field caveat**: GNews `content` is truncated for free tier users and ends with `[+N chars]` (e.g. `...release date. [+5122 chars]`). Always strip this suffix via regex before using the content. The actual usable content may be as short as 200-300 characters; fall back to `description` when `content` is too short.
 
 ### Source Blacklist
 
@@ -197,13 +277,15 @@ If sandbox or keychain access blocks `lark-cli`, rerun the command with escalati
 
 For each run, summarize:
 
+- **429 impact**: number of 429 errors per category, which requests were skipped
 - number of GNews candidates fetched per category
-- number kept after pre-filter
-- number passed score threshold
+- number kept after pre-filter (dedup + blacklist + 7-day)
+- number passed adaptive score threshold
 - number selected (top 25 or fewer)
 - number written to Feishu Base
 - any categories with shortfall (< 25 articles)
-- any API or permission failures (including 429 rate limit hits)
-- total API requests consumed vs daily quota
+- any API or permission failures
+- total API requests consumed vs daily quota (100/day)
+- **recommendation**: whether date range should be extended for 旅游/美食 next run
 
 Do not claim images are attached unless an image generation step and attachment upload have actually run.

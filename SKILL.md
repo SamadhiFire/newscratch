@@ -55,7 +55,7 @@ This creates:
 Read `references/base-schema.md` before generating the normalized output. For every selected item, preserve source facts and create these fields:
 
 - `generatedTitle`: rewritten English headline, 45-90 characters, complete and not truncated.
-- `body`: formal English news article, 600-1000 characters, readable as a standalone article.
+- `body`: formal English news article, 700-900 words (approximately 3,500–5,000 characters), readable as a standalone article with sufficient depth, context, and detail.
 - `imagePrompt`: 16:9 editorial cover prompt, no text, no watermark, no logo.
 - `generatedBy`: exactly `model`, so the writer can reject old script/template artifacts.
 
@@ -135,7 +135,7 @@ For each item in `processed/generation-input.json`:
 - You may add light category context only when it is generic and does not introduce new facts.
 - Rewrite the headline from scratch. Do not copy the GNews title unless the source title is already a clean publication headline and still needs no improvement.
 - Write a standalone formal English news article, not a bullet summary or source attribution sentence.
-- Keep body length between 600 and 1000 characters.
+- Keep body length between 700 and 900 words (approximately 3,500–5,000 characters).
 - Generate an editorial image prompt that describes the visual scene; no text/watermarks/logos.
 
 Output must be a JSON array matching `references/base-schema.md`.
@@ -147,7 +147,7 @@ Output must be a JSON array matching `references/base-schema.md`.
 - `generatedTitle`, `body`, or `imagePrompt` is missing.
 - `generatedBy` is missing or is not exactly `model`.
 - `generatedTitle` is longer than 90 characters or appears truncated.
-- `body` is outside 600-1000 characters.
+- `body` is outside 700-900 words (approximately 3,500–5,000 characters).
 - `body` starts like an internal summary (`A report from`, `According to the source`, `This story fits`).
 - `body` still contains a GNews truncation suffix.
 

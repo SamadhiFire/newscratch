@@ -92,8 +92,8 @@ foreach ($record in $records) {
   if ($generatedTitle -match "(\.\.\.|\u2026)$") {
     throw "generatedTitle looks truncated for URL $($record.sourceUrl). Rewrite it as a complete headline."
   }
-  if ($body.Length -lt 600 -or $body.Length -gt 1000) {
-    throw "body must be 600-1000 characters for URL $($record.sourceUrl). Current length: $($body.Length)."
+  if ($body.Length -lt 3500 -or $body.Length -gt 5000) {
+    throw "body must be 700-900 words (approximately 3,500-5,000 characters) for URL $($record.sourceUrl). Current length: $($body.Length)."
   }
   if ($body -match "(?i)^\s*(A report from|According to the source|This story fits)\b") {
     throw "body starts like an internal summary for URL $($record.sourceUrl). Rewrite it as a formal news article."

@@ -1,0 +1,3 @@
+display_name: GNews To Lark Base
+short_description: Fetch international news via GNews API, score, generate Chinese articles, and write to Feishu Base.
+default_prompt: Use GNews API (key: ebc3f32f8ed3f49c5a25ac145cb55ed7) to fetch the previous 24 hours of international news for 科技AI, 娱乐体育, 旅游, and 美食. Score each item (relevance + novelty + completeness = total), generate Chinese articles (600-800 chars), and write records to the configured Feishu Base table. AI评分 field gets the total score number only; AI评价内容 gets the detailed breakdown.

@@ -8,7 +8,7 @@ Use these rules when changing fetch keywords, thresholds, or source filters.
 - Every accepted item must have a real source URL.
 - Reject items with missing/vague publish time or publish time older than 7 days.
 - Do not invent source title, URL, publish time, or quoted facts.
-- Target output: top 25 articles per category, 100 total.
+- Target output: top 25 articles per category, 125 total.
 - If fewer than 25 pass in one category, run one backup search for that category and note any remaining shortfall.
 
 ## Request Staggering
@@ -18,8 +18,8 @@ Always stagger requests across categories. Do not run every query for one catego
 Recommended order:
 
 ```text
-科技AI R1 -> 娱乐体育 R1 -> 娱乐体育 R2 -> 旅游 R1 -> 美食 R1
-科技AI R2 -> 娱乐体育 R3 -> 旅游 R2 -> 美食 R2
+科技AI R1 -> 娱乐体育 R1 -> 娱乐体育 R2 -> 旅游 R1 -> 美食 R1 -> 音乐 R1
+科技AI R2 -> 娱乐体育 R3 -> 旅游 R2 -> 美食 R2 -> 音乐 R2
 ...continue round-robin
 ```
 
@@ -46,7 +46,7 @@ Prefer practical technology updates, AI products, infrastructure, chips, securit
 
 ### 娱乐体育
 
-Strategy: 2 headlines requests + 6 search requests = 8 requests.
+Strategy: 2 headlines requests + 5 search requests = 7 requests.
 
 | # | Type | Query | max |
 |---|---|---|---|
@@ -54,10 +54,9 @@ Strategy: 2 headlines requests + 6 search requests = 8 requests.
 | 2 | headlines | `category=sports` | 10 |
 | 3 | search | `celebrity OR star OR gossip` | 10 |
 | 4 | search | `movie OR film OR box office` | 10 |
-| 5 | search | `music OR concert OR album` | 10 |
-| 6 | search | `football OR soccer` | 10 |
-| 7 | search | `basketball OR NBA` | 10 |
-| 8 | search | `tennis OR golf OR Olympics OR racing` | 10 |
+| 5 | search | `football OR soccer` | 10 |
+| 6 | search | `basketball OR NBA` | 10 |
+| 7 | search | `tennis OR golf OR Olympics OR racing` | 10 |
 | backup | search | `video game OR e-sports OR streaming` | 10 |
 
 Gossip, celebrity news, and entertainment rumors are allowed when sourced. Reject pure fabrication, harassment, or no-source paparazzi content.
@@ -98,6 +97,24 @@ Strategy: search only. GNews has no food headlines category.
 
 Prefer dining news, restaurant openings, food trends, local cuisine, awards, markets, festivals, and practical food stories.
 
+### 音乐
+
+Strategy: search only. GNews has no dedicated music headlines category.
+
+| # | Type | Query | max |
+|---|---|---|---|
+| 1 | search | `music OR musician OR singer` | 10 |
+| 2 | search | `concert OR tour OR live performance` | 10 |
+| 3 | search | `album OR single OR EP` | 10 |
+| 4 | search | `billboard OR chart OR streaming` | 10 |
+| 5 | search | `grammy OR music award` | 10 |
+| 6 | search | `festival OR headline set OR lineup` | 10 |
+| 7 | search | `band OR orchestra OR composer` | 10 |
+| 8 | search | `music industry OR record label` | 10 |
+| backup | search | `soundtrack OR score OR music release` | 10 |
+
+Prefer artist releases, tours, live performances, charts, awards, festival lineups, and music industry developments.
+
 ## Keyword Guidelines
 
 GNews search is not Google Search. Very narrow queries often return 0 results.
@@ -132,6 +149,7 @@ Adaptive thresholds:
 | 娱乐体育 | 20 | Dedicated headlines plus high-density search |
 | 旅游 | 18 | Search only, no headlines category |
 | 美食 | 18 | Search only, no headlines category |
+| 音乐 | 18 | Search only, no headlines category |
 
 Sort passed items by total score descending and select the top 25 per category.
 

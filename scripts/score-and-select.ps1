@@ -12,7 +12,7 @@ function U {
   return [System.Text.RegularExpressions.Regex]::Unescape($Text)
 }
 
-$statusReadyForGeneration = U "\u5f85AI\u751f\u6210"
+$statusReadyForGeneration = U "\u5f85\u751f\u6210"
 $publishStatusPending = U "\u672a\u53d1\u5e03"
 
 $categoryConfigs = @(
@@ -28,7 +28,7 @@ $categoryConfigs = @(
     name = U "\u5a31\u4e50\u4f53\u80b2"
     english = "Entertainment and sports"
     threshold = 20
-    keywords = @("celebrity", "movie", "film", "box office", "music", "concert", "album", "football", "soccer", "basketball", "nba", "tennis", "golf", "olympics", "racing", "sports")
+    keywords = @("celebrity", "movie", "film", "box office", "football", "soccer", "basketball", "nba", "tennis", "golf", "olympics", "racing", "sports", "match", "tournament", "league")
   },
   @{
     key = "travel"
@@ -43,6 +43,13 @@ $categoryConfigs = @(
     english = "Food and dining"
     threshold = 18
     keywords = @("food", "restaurant", "dining", "cuisine", "michelin", "coffee", "bakery", "cafe", "diet", "wine", "beer", "cooking", "recipe", "festival", "market", "vegan")
+  },
+  @{
+    key = "music"
+    name = U "\u97f3\u4e50"
+    english = "Music"
+    threshold = 18
+    keywords = @("music", "musician", "singer", "artist", "concert", "tour", "album", "single", "ep", "billboard", "chart", "streaming", "grammy", "festival", "lineup", "band", "orchestra", "composer", "record label", "soundtrack")
   }
 )
 

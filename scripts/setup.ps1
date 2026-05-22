@@ -1,6 +1,12 @@
 param(
   [string]$GNewsApiKey = $env:GNEWS_API_KEY,
   [string]$LarkCli = $env:LARK_CLI,
+  [string]$ImageApiUrl = $env:IMAGE_API_URL,
+  [string]$ImageApiKey = $env:IMAGE_API_KEY,
+  [string]$ImageModel = $env:IMAGE_MODEL,
+  [string]$ImageSize = $env:IMAGE_SIZE,
+  [string]$ImageOutputFormat = $env:IMAGE_OUTPUT_FORMAT,
+  [string]$PythonExe = $env:PYTHON_EXE,
   [switch]$NoPersist,
   [switch]$SkipDryRun,
   [switch]$AssumeYes
@@ -55,12 +61,39 @@ function Resolve-LarkCli {
   return $null
 }
 
+function Resolve-Python {
+  param([string]$PathFromUser)
+
+  if ($PathFromUser -and (Test-Path -LiteralPath $PathFromUser)) {
+    return (Resolve-Path -LiteralPath $PathFromUser).Path
+  }
+
+  $candidates = @(
+    "python",
+    "py",
+    "C:\Users\AS\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+  )
+
+  foreach ($candidate in $candidates) {
+    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($cmd) {
+      return $cmd.Source
+    }
+    if (Test-Path -LiteralPath $candidate -ErrorAction SilentlyContinue) {
+      return (Resolve-Path -LiteralPath $candidate).Path
+    }
+  }
+
+  return $null
+}
+
 Write-Host "NewsCatch first-time setup"
 Write-Host ""
 Write-Host "Before continuing, please make sure:"
 Write-Host "  1. larksuite/cli is installed: https://github.com/larksuite/cli"
 Write-Host "  2. lark-cli is logged in and has write access to the target Base."
 Write-Host "  3. You have a free GNews API key from https://gnews.io/."
+Write-Host "  4. If you want image upload, you have an image API URL/key and a Python runtime with Pillow WebP support."
 Write-Host ""
 
 if (-not (Confirm-YesNo -Question "Have you completed the larksuite/cli and GNews prerequisites?")) {
@@ -108,6 +141,64 @@ if ($resolvedLarkCli) {
   Write-Host "Install it from https://github.com/larksuite/cli, then run its login/auth command."
   Write-Host "If it is installed in a custom location, rerun setup with:"
   Write-Host "  .\scripts\setup.ps1 -LarkCli `"C:\path\to\lark-cli.cmd`""
+}
+
+$resolvedPython = Resolve-Python -PathFromUser $PythonExe
+if ($resolvedPython) {
+  $env:PYTHON_EXE = $resolvedPython
+  if (-not $NoPersist) {
+    [Environment]::SetEnvironmentVariable("PYTHON_EXE", $resolvedPython, "User")
+  }
+  Write-Host "Found Python: $resolvedPython"
+} else {
+  Write-Warning "Could not find a Python runtime. WebP conversion will fail until PYTHON_EXE points to a working Python with Pillow."
+}
+
+if (-not $ImageApiUrl -and (Confirm-YesNo -Question "Do you want to configure the image API now?" -DefaultYes $false)) {
+  $ImageApiUrl = Read-Host "Image API URL"
+}
+if (-not $ImageApiKey -and $ImageApiUrl) {
+  $secureImageKey = Read-Host "Paste your image API key" -AsSecureString
+  $imageKeyPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureImageKey)
+  try {
+    $ImageApiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($imageKeyPtr)
+  } finally {
+    if ($imageKeyPtr -ne [IntPtr]::Zero) {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($imageKeyPtr)
+    }
+  }
+}
+if (-not $ImageModel -and $ImageApiUrl) {
+  $ImageModel = Read-Host "Image model (for example gpt-image-2)"
+}
+if (-not $ImageSize -and $ImageApiUrl) {
+  $ImageSize = Read-Host "Image size (default 1792x1024)"
+  if (-not $ImageSize) { $ImageSize = "1792x1024" }
+}
+if (-not $ImageOutputFormat -and $ImageApiUrl) {
+  $ImageOutputFormat = Read-Host "Image output format (png/webp, default webp)"
+  if (-not $ImageOutputFormat) { $ImageOutputFormat = "webp" }
+}
+
+if ($ImageApiUrl) {
+  $env:IMAGE_API_URL = $ImageApiUrl
+  if (-not $NoPersist) { [Environment]::SetEnvironmentVariable("IMAGE_API_URL", $ImageApiUrl, "User") }
+}
+if ($ImageApiKey) {
+  $env:IMAGE_API_KEY = $ImageApiKey
+  if (-not $NoPersist) { [Environment]::SetEnvironmentVariable("IMAGE_API_KEY", $ImageApiKey, "User") }
+}
+if ($ImageModel) {
+  $env:IMAGE_MODEL = $ImageModel
+  if (-not $NoPersist) { [Environment]::SetEnvironmentVariable("IMAGE_MODEL", $ImageModel, "User") }
+}
+if ($ImageSize) {
+  $env:IMAGE_SIZE = $ImageSize
+  if (-not $NoPersist) { [Environment]::SetEnvironmentVariable("IMAGE_SIZE", $ImageSize, "User") }
+}
+if ($ImageOutputFormat) {
+  $env:IMAGE_OUTPUT_FORMAT = $ImageOutputFormat
+  if (-not $NoPersist) { [Environment]::SetEnvironmentVariable("IMAGE_OUTPUT_FORMAT", $ImageOutputFormat, "User") }
 }
 
 if (-not $SkipDryRun) {

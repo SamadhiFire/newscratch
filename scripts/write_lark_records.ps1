@@ -24,11 +24,74 @@ function Resolve-OutputPath {
   return (Join-Path (Get-Location) $Path)
 }
 
+function Get-RelativeCliPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $resolved = Resolve-Path -LiteralPath $Path
+  $relative = Resolve-Path -LiteralPath $resolved.Path -Relative
+  $relative = $relative -replace "\\", "/"
+  if (-not $relative.StartsWith("./") -and -not $relative.StartsWith("../")) {
+    $relative = "./$relative"
+  }
+  return $relative
+}
+
+function Resolve-ExistingCommandPath {
+  param($CommandInfo)
+
+  if ($null -eq $CommandInfo) { return $null }
+
+  $candidates = @(
+    $CommandInfo.Path,
+    $CommandInfo.Source,
+    $CommandInfo.Definition
+  ) | Where-Object { $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) }
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -notmatch '[\r\n]' -and (Test-Path -LiteralPath $candidate -ErrorAction SilentlyContinue)) {
+      return $candidate
+    }
+  }
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -notmatch '[\r\n]') {
+      return $candidate
+    }
+  }
+
+  return $null
+}
+
+function Invoke-LarkCli {
+  param(
+    [string]$LarkCliPath,
+    [string[]]$Arguments
+  )
+
+  $savedNodeOptions = $env:NODE_OPTIONS
+  $env:NODE_OPTIONS = ""
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & $LarkCliPath @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($null -ne $savedNodeOptions) { $env:NODE_OPTIONS = $savedNodeOptions } else { Remove-Item Env:\NODE_OPTIONS -ErrorAction SilentlyContinue }
+  }
+
+  return [pscustomobject]@{
+    ExitCode = $exitCode
+    Text = ($output | Out-String).Trim()
+  }
+}
+
 $allowedCategories = @(
   (U "\u79d1\u6280AI"),
   (U "\u5a31\u4e50\u4f53\u80b2"),
   (U "\u65c5\u6e38"),
-  (U "\u7f8e\u98df")
+  (U "\u7f8e\u98df"),
+  (U "\u97f3\u4e50")
 )
 
 $defaultStatus = U "\u5df2\u751f\u6210"
@@ -58,6 +121,7 @@ $fields = @(
   (U "\u4f18\u5316\u540e\u6807\u9898"),
   (U "\u4f18\u5316\u540e\u6b63\u6587"),
   (U "\u6587\u751f\u56fe\u63d0\u793a\u8bcd"),
+  (U "\u751f\u6210\u56fe\u7247"),
   (U "\u53d1\u5e03\u72b6\u6001")
 )
 
@@ -84,6 +148,16 @@ foreach ($record in $records) {
     throw "Missing generatedBy=`"model`" for URL $($record.sourceUrl). Final title/body/imagePrompt must be created by the model, not by a script template."
   }
 
+  $generatedImageUrl = if ($record.generatedImageUrl) { [string]$record.generatedImageUrl } else { "" }
+  $generatedImagePath = if ($record.generatedImagePath) { [string]$record.generatedImagePath } else { "" }
+  if ($generatedImageUrl -and $generatedImageUrl -notmatch '^https?://') {
+    throw "Invalid generatedImageUrl for URL $($record.sourceUrl): $generatedImageUrl"
+  }
+  $hasGeneratedImageFile = $false
+  if ($generatedImagePath) {
+    $hasGeneratedImageFile = Test-Path -LiteralPath $generatedImagePath -ErrorAction SilentlyContinue
+  }
+
   $generatedTitle = [string]$record.generatedTitle
   $body = [string]$record.body
   if ($generatedTitle.Length -gt 90) {
@@ -104,7 +178,7 @@ foreach ($record in $records) {
 
   $publishedAt = if ($record.publishedAt) { [string]$record.publishedAt } else { Get-Date -Format "yyyy-MM-dd HH:mm:ss" }
   # Keep select fields stable across PowerShell/CLI encodings; user JSON only supplies content fields.
-  $status = $defaultStatus
+  $status = if ($generatedImageUrl -or $hasGeneratedImageFile) { $defaultStatus } else { (U "\u5931\u8d25") }
   $publishStatus = $defaultPublishStatus
   $sourceTitle = if ($record.sourceTitle) { [string]$record.sourceTitle } else { [string]$record.generatedTitle }
   $sourceBody = if ($record.sourceBody) { [string]$record.sourceBody } elseif ($record.sourceContent) { [string]$record.sourceContent } else { [string]$record.body }
@@ -123,6 +197,7 @@ foreach ($record in $records) {
     $generatedTitle,
     $body,
     [string]$record.imagePrompt,
+    $generatedImageUrl,
     $publishStatus
   )
 }
@@ -155,62 +230,39 @@ if ($DryRun) {
 # Resolve lark-cli path: on Windows, lark-cli may be a POSIX shell script that
 # PowerShell cannot invoke directly. Fall back to node + @larksuite/cli run.js.
 # Also clear NODE_OPTIONS (e.g. --use-system-ca set by sandbox) which can crash node.
-if (-not $LarkCli -or -not (Test-Path -LiteralPath $LarkCli)) {
+if (-not $LarkCli) {
   $resolved = Get-Command lark-cli -ErrorAction SilentlyContinue
   if ($null -eq $resolved) {
     throw "lark-cli not found. Set LARK_CLI or pass -LarkCli with the full path."
   }
-  $LarkCli = $resolved.Source
+  $LarkCli = Resolve-ExistingCommandPath -CommandInfo $resolved
 }
 
-$useNodeWrapper = $false
-$nodeExe = $null
-$runJs = $null
-if ($env:OS -eq "Windows_NT") {
-  $cliItem = Get-Item -LiteralPath $LarkCli -ErrorAction SilentlyContinue
-  if ($cliItem -and (-not $cliItem.Extension -or $cliItem.Extension -eq ".sh")) {
-    $cliDir = Split-Path -Parent $cliItem.FullName
-    $runJs = Join-Path $cliDir "node_modules/@larksuite/cli/scripts/run.js"
-    $nodeExe = Join-Path $cliDir "node.exe"
-    if (-not (Test-Path -LiteralPath $nodeExe)) {
-      $nodeResolved = Get-Command node -ErrorAction SilentlyContinue
-      if ($nodeResolved) { $nodeExe = $nodeResolved.Source }
-    }
-    if ($nodeExe -and $runJs -and (Test-Path -LiteralPath $runJs)) {
-      $useNodeWrapper = $true
-    }
-  }
+if (-not $LarkCli) {
+  throw "Unable to resolve a usable lark-cli path."
 }
 
-# Build the CLI arguments as a string for Start-Process / cmd /c fallback
-$cliArgs = "base +record-batch-create --base-token $BaseToken --table-id $TableId --as user --json ""@$jsonArgPath"""
-
-$savedNodeOptions = $env:NODE_OPTIONS
-$env:NODE_OPTIONS = ""
-$previousErrorActionPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-try {
-  if ($useNodeWrapper) {
-    $proc = Start-Process -FilePath $nodeExe -ArgumentList "$runJs $cliArgs" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$env:TEMP\lark-cli-stdout.txt" -RedirectStandardError "$env:TEMP\lark-cli-stderr.txt"
-    $exitCode = $proc.ExitCode
-    $cliOutput = @()
-    if (Test-Path "$env:TEMP\lark-cli-stdout.txt") { $cliOutput += Get-Content "$env:TEMP\lark-cli-stdout.txt" -Raw }
-    if (Test-Path "$env:TEMP\lark-cli-stderr.txt") { $cliOutput += Get-Content "$env:TEMP\lark-cli-stderr.txt" -Raw }
-  } else {
-    $cliOutput = & $LarkCli $cliArgs.Split(" ") 2>&1
-    $exitCode = $LASTEXITCODE
-  }
-} finally {
-  $ErrorActionPreference = $previousErrorActionPreference
-  if ($null -ne $savedNodeOptions) { $env:NODE_OPTIONS = $savedNodeOptions } else { Remove-Item Env:\NODE_OPTIONS -ErrorAction SilentlyContinue }
+if (-not (Test-Path -LiteralPath $LarkCli -ErrorAction SilentlyContinue)) {
+  throw "lark-cli path not found: $LarkCli"
 }
-$cliText = ($cliOutput | Out-String).Trim()
+
+$cliArgsList = @(
+  "base",
+  "+record-batch-create",
+  "--base-token", $BaseToken,
+  "--table-id", $TableId,
+  "--as", "user",
+  "--json", "@$jsonArgPath"
+)
+
+$createResult = Invoke-LarkCli -LarkCliPath $LarkCli -Arguments $cliArgsList
+$cliText = $createResult.Text
 if ($cliText) {
   Write-Output $cliText
 }
 
-if ($exitCode -ne 0) {
-  throw "lark-cli failed with exit code $exitCode."
+if ($createResult.ExitCode -ne 0) {
+  throw "lark-cli failed with exit code $($createResult.ExitCode)."
 }
 
 try {
@@ -221,4 +273,41 @@ try {
   }
 } catch [System.ArgumentException] {
   # Non-JSON output is acceptable as long as lark-cli exited successfully.
+}
+
+$recordIds = @()
+if ($cliJson -and $cliJson.data -and $cliJson.data.record_id_list) {
+  $recordIds = @($cliJson.data.record_id_list)
+}
+
+for ($i = 0; $i -lt $records.Count; $i++) {
+  $record = $records[$i]
+  $recordId = if ($i -lt $recordIds.Count) { [string]$recordIds[$i] } else { "" }
+  $generatedImagePath = if ($record.generatedImagePath) { [string]$record.generatedImagePath } else { "" }
+
+  if (-not $recordId -or -not $generatedImagePath) {
+    continue
+  }
+  if (-not (Test-Path -LiteralPath $generatedImagePath)) {
+    Write-Warning ("Generated image file not found for record {0}: {1}" -f $recordId, $generatedImagePath)
+    continue
+  }
+
+  $uploadArgs = @(
+    "base",
+    "+record-upload-attachment",
+    "--base-token", $BaseToken,
+    "--table-id", $TableId,
+    "--record-id", $recordId,
+    "--field-id", (U "\u56fe\u7247"),
+    "--file", (Get-RelativeCliPath -Path $generatedImagePath),
+    "--as", "user"
+  )
+  $uploadResult = Invoke-LarkCli -LarkCliPath $LarkCli -Arguments $uploadArgs
+  if ($uploadResult.Text) {
+    Write-Output $uploadResult.Text
+  }
+  if ($uploadResult.ExitCode -ne 0) {
+    throw "Attachment upload failed for record $recordId with exit code $($uploadResult.ExitCode)."
+  }
 }

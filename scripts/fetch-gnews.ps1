@@ -22,6 +22,7 @@ $categories = [ordered]@{
   entertainment = U "\u5a31\u4e50\u4f53\u80b2"
   travel = U "\u65c5\u6e38"
   food = U "\u7f8e\u98df"
+  music = U "\u97f3\u4e50"
 }
 
 $requestSpecs = [ordered]@{
@@ -39,7 +40,6 @@ $requestSpecs = [ordered]@{
     @{ type = "headlines"; category = "sports"; label = "sports headlines" },
     @{ type = "search"; q = "celebrity OR star OR gossip"; label = "celebrity OR star OR gossip" },
     @{ type = "search"; q = "movie OR film OR box office"; label = "movie OR film OR box office" },
-    @{ type = "search"; q = "music OR concert OR album"; label = "music OR concert OR album" },
     @{ type = "search"; q = "football OR soccer"; label = "football OR soccer" },
     @{ type = "search"; q = "basketball OR NBA"; label = "basketball OR NBA" },
     @{ type = "search"; q = "tennis OR golf OR Olympics OR racing"; label = "tennis OR golf OR Olympics OR racing" }
@@ -64,6 +64,16 @@ $requestSpecs = [ordered]@{
     @{ type = "search"; q = "cooking class OR food recipe"; label = "cooking class OR food recipe" },
     @{ type = "search"; q = "food festival OR food market"; label = "food festival OR food market" }
   )
+  music = @(
+    @{ type = "search"; q = "music OR musician OR singer"; label = "music OR musician OR singer" },
+    @{ type = "search"; q = "concert OR tour OR live performance"; label = "concert OR tour OR live performance" },
+    @{ type = "search"; q = "album OR single OR EP"; label = "album OR single OR EP" },
+    @{ type = "search"; q = "billboard OR chart OR streaming"; label = "billboard OR chart OR streaming" },
+    @{ type = "search"; q = "grammy OR music award"; label = "grammy OR music award" },
+    @{ type = "search"; q = "festival OR headline set OR lineup"; label = "festival OR headline set OR lineup" },
+    @{ type = "search"; q = "band OR orchestra OR composer"; label = "band OR orchestra OR composer" },
+    @{ type = "search"; q = "music industry OR record label"; label = "music industry OR record label" }
+  )
 }
 
 $backupSpecs = @{
@@ -71,6 +81,7 @@ $backupSpecs = @{
   entertainment = @{ type = "search"; q = "video game OR e-sports OR streaming"; label = "backup: video game OR e-sports OR streaming" }
   travel = @{ type = "search"; q = "visa OR passport OR travel policy"; label = "backup: visa OR passport OR travel policy" }
   food = @{ type = "search"; q = "dessert OR vegan food OR organic"; label = "backup: dessert OR vegan food OR organic" }
+  music = @{ type = "search"; q = "soundtrack OR score OR music release"; label = "backup: soundtrack OR score OR music release" }
 }
 
 function New-PlanItem {
@@ -96,9 +107,9 @@ function New-PlanItem {
 
 function New-RequestPlan {
   $plan = @()
-  $cursor = @{ tech = 0; entertainment = 0; travel = 0; food = 0 }
-  $seed = @("tech", "entertainment", "entertainment", "travel", "food")
-  $roundRobin = @("tech", "entertainment", "travel", "food")
+  $cursor = @{ tech = 0; entertainment = 0; travel = 0; food = 0; music = 0 }
+  $seed = @("tech", "entertainment", "entertainment", "travel", "food", "music")
+  $roundRobin = @("tech", "entertainment", "travel", "food", "music")
   $number = 1
 
   foreach ($key in $seed) {
@@ -342,6 +353,7 @@ $rawByCategory = @{
   entertainment = @()
   travel = @()
   food = @()
+  music = @()
 }
 $requestLog = @()
 

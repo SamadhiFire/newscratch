@@ -50,6 +50,13 @@ $categoryConfigs = @(
     english = "Music"
     threshold = 18
     keywords = @("music", "musician", "singer", "artist", "concert", "tour", "album", "single", "ep", "billboard", "chart", "streaming", "grammy", "festival", "lineup", "band", "orchestra", "composer", "record label", "soundtrack")
+  },
+  @{
+    key = "life"
+    name = U "\u751f\u6d3b"
+    english = "Lifestyle and daily living"
+    threshold = 18
+    keywords = @("wellness", "healthy living", "nutrition", "budget meal", "superfood", "sleep", "stress", "mental health", "family", "household", "cleaning", "home remedy", "chronic disease", "work injury", "stretching", "self care", "safety", "health scam")
   }
 )
 

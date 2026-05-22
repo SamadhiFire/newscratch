@@ -18,7 +18,7 @@ Important boundary: scripts do **not** write the final optimized title or body. 
 - Image API URL: use `IMAGE_API_URL`
 - Image API key: use `IMAGE_API_KEY`
 - Image model: use `IMAGE_MODEL`, default `gpt-image-2`
-- Image size: use `IMAGE_SIZE`, default `1792x1024`
+- Image size: use `IMAGE_SIZE`, default `1152x576`
 - Image output format: use `IMAGE_OUTPUT_FORMAT`, default `webp`
 - Python runtime for WebP conversion: use `PYTHON_EXE` or ensure `python` is available
 - Base token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`

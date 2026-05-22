@@ -91,7 +91,8 @@ $allowedCategories = @(
   (U "\u5a31\u4e50\u4f53\u80b2"),
   (U "\u65c5\u6e38"),
   (U "\u7f8e\u98df"),
-  (U "\u97f3\u4e50")
+  (U "\u97f3\u4e50"),
+  (U "\u751f\u6d3b")
 )
 
 $defaultStatus = U "\u5df2\u751f\u6210"

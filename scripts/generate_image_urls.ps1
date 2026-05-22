@@ -8,7 +8,7 @@ param(
   [string]$ImageApiUrl = $(if ($env:IMAGE_API_URL) { $env:IMAGE_API_URL } else { "http://10.90.0.142:8088/v1/images/generations" }),
   [string]$ImageModel = $(if ($env:IMAGE_MODEL) { $env:IMAGE_MODEL } else { "gpt-image-2" }),
   [string]$ImageApiKey = $env:IMAGE_API_KEY,
-  [string]$ImageSize = $(if ($env:IMAGE_SIZE) { $env:IMAGE_SIZE } else { "1792x1024" }),
+  [string]$ImageSize = $(if ($env:IMAGE_SIZE) { $env:IMAGE_SIZE } else { "1152x576" }),
   [ValidateSet("png", "webp")]
   [string]$ImageOutputFormat = $(if ($env:IMAGE_OUTPUT_FORMAT) { $env:IMAGE_OUTPUT_FORMAT } else { "webp" }),
   [int]$WebpQuality = 90,

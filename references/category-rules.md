@@ -6,9 +6,9 @@ Use these rules when changing fetch keywords, thresholds, or source filters.
 
 - Only use articles published within the previous 7 days relative to the run time.
 - Every accepted item must have a real source URL.
-- Reject items with missing/vague publish time or publish time older than 7 days.
+- Reject items with missing or vague publish time, or publish time older than 7 days.
 - Do not invent source title, URL, publish time, or quoted facts.
-- Target output: top 25 articles per category, 125 total.
+- Target output: top 25 articles per category, 150 total.
 - If fewer than 25 pass in one category, run one backup search for that category and note any remaining shortfall.
 
 ## Request Staggering
@@ -18,8 +18,8 @@ Always stagger requests across categories. Do not run every query for one catego
 Recommended order:
 
 ```text
-科技AI R1 -> 娱乐体育 R1 -> 娱乐体育 R2 -> 旅游 R1 -> 美食 R1 -> 音乐 R1
-科技AI R2 -> 娱乐体育 R3 -> 旅游 R2 -> 美食 R2 -> 音乐 R2
+科技AI R1 -> 娱乐体育 R1 -> 娱乐体育 R2 -> 旅游 R1 -> 美食 R1 -> 音乐 R1 -> 生活 R1
+科技AI R2 -> 娱乐体育 R3 -> 旅游 R2 -> 美食 R2 -> 音乐 R2 -> 生活 R2
 ...continue round-robin
 ```
 
@@ -42,7 +42,7 @@ Strategy: 1 headlines request + 6 search requests = 7 requests.
 | 7 | search | `software OR app OR cloud` | 10 |
 | backup | search | `electric vehicle OR battery OR self-driving` | 10 |
 
-Prefer practical technology updates, AI products, infrastructure, chips, security, space, robotics, and software/cloud stories.
+Prefer practical technology updates, AI products, infrastructure, chips, security, space, robotics, and software or cloud stories.
 
 ### 娱乐体育
 
@@ -77,7 +77,7 @@ Strategy: search only. GNews has no travel headlines category.
 | 8 | search | `national park OR adventure travel` | 10 |
 | backup | search | `visa OR passport OR travel policy` | 10 |
 
-Prefer route changes, airline updates, travel policy, destination trends, hotel/resort news, and practical travel information.
+Prefer route changes, airline updates, travel policy, destination trends, hotel or resort news, and practical travel information.
 
 ### 美食
 
@@ -115,6 +115,24 @@ Strategy: search only. GNews has no dedicated music headlines category.
 
 Prefer artist releases, tours, live performances, charts, awards, festival lineups, and music industry developments.
 
+### 生活
+
+Strategy: search only. This category is for daily living, wellness, family life, work strain relief, and practical household knowledge.
+
+| # | Type | Query | max |
+|---|---|---|---|
+| 1 | search | `healthy living OR wellness` | 10 |
+| 2 | search | `superfood OR budget meal OR nutrition` | 10 |
+| 3 | search | `sleep OR stress relief OR mental resilience` | 10 |
+| 4 | search | `home remedy OR chronic disease advice` | 10 |
+| 5 | search | `workplace injury OR back pain OR stretching` | 10 |
+| 6 | search | `family life hack OR home cleaning OR household tips` | 10 |
+| 7 | search | `healthy habit OR daily routine OR self care` | 10 |
+| 8 | search | `consumer health warning OR health scam OR family safety` | 10 |
+| backup | search | `wellness OR family health OR sleep routine` | 10 |
+
+Prefer practical wellness guidance, low-cost nutrition, sleep and stress content, chronic disease education, work injury prevention, household life hacks, family safety, and health scam warnings.
+
 ## Keyword Guidelines
 
 GNews search is not Google Search. Very narrow queries often return 0 results.
@@ -150,6 +168,7 @@ Adaptive thresholds:
 | 旅游 | 18 | Search only, no headlines category |
 | 美食 | 18 | Search only, no headlines category |
 | 音乐 | 18 | Search only, no headlines category |
+| 生活 | 18 | Search only, practical daily living and wellness content |
 
 Sort passed items by total score descending and select the top 25 per category.
 

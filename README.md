@@ -1,4 +1,4 @@
-# NewsCatch 新闻采集与飞书发布 Skill
+# NewsScatch 新闻采集与飞书发布 Skill
 
 这是一个用于新闻采集、筛选、改写、配图并写入飞书多维表格的 Skill 与脚本集合。
 
@@ -37,8 +37,9 @@
 | `旅游` | 旅游 |
 | `美食` | 餐饮与美食 |
 | `音乐` | 音乐 |
+| `生活` | 生活方式与家庭日常 |
 
-周目标默认是每个分类 25 条，共 125 条。
+周目标默认是每个分类 25 条，共 150 条。
 
 ## 仓库结构
 
@@ -91,7 +92,7 @@ $env:LARK_CLI = "C:\path\to\lark-cli.ps1"
 $env:IMAGE_API_URL = "你的图片接口地址"
 $env:IMAGE_API_KEY = "你的图片接口 Key"
 $env:IMAGE_MODEL = "gpt-image-2"
-$env:IMAGE_SIZE = "1792x1024"
+$env:IMAGE_SIZE = "1152x576"
 ```
 
 ### 4. Python 与 Pillow
@@ -136,7 +137,7 @@ $env:LARK_CLI = "C:\path\to\lark-cli.ps1"
 $env:IMAGE_API_URL = "http://host:port/v1/images/generations"
 $env:IMAGE_API_KEY = "..."
 $env:IMAGE_MODEL = "gpt-image-2"
-$env:IMAGE_SIZE = "1792x1024"
+$env:IMAGE_SIZE = "1152x576"
 $env:IMAGE_OUTPUT_FORMAT = "webp"
 $env:PYTHON_EXE = "C:\path\to\python.exe"
 ```
@@ -174,7 +175,7 @@ fatal: unable to access 'https://github.com/...': Failed to connect to github.co
 ```text
 IMAGE_API_URL=http://10.90.0.142:8088/v1/images/generations
 IMAGE_MODEL=gpt-image-2
-IMAGE_SIZE=1792x1024
+IMAGE_SIZE=1152x576
 IMAGE_OUTPUT_FORMAT=webp
 ```
 

@@ -10,7 +10,7 @@
 
 | Field | Type | Notes |
 |---|---|---|
-| `新闻分类` | select | One of `科技AI`, `娱乐体育`, `旅游`, `美食`, `音乐` |
+| `新闻分类` | select | One of `科技AI`, `娱乐体育`, `旅游`, `美食`, `音乐`, `生活` |
 | `新闻来源链接` | URL/text | Source URL string |
 | `新闻标题` | text | Original source title kept for reference |
 | `新闻正文` | text | Original source body or description kept for reference |

@@ -4,11 +4,13 @@ param(
   [string]$GenerationInputJson = ".\processed\generation-input.json",
   [string]$RecordsJson = ".\records.normalized.json",
   [string]$ImageRecordsJson = ".\processed\records.with-images.json",
-  [int]$Days = 7,
+  [ValidateSet("daily", "weekly")]
+  [string]$UpdateMode = $(if ($env:NEWS_UPDATE_MODE) { $env:NEWS_UPDATE_MODE } else { "weekly" }),
+  [int]$Days = $(if ($env:NEWS_UPDATE_DAYS) { [int]$env:NEWS_UPDATE_DAYS } elseif ($env:NEWS_UPDATE_MODE -eq "daily") { 1 } else { 7 }),
   [string]$ImageApiUrl = $(if ($env:IMAGE_API_URL) { $env:IMAGE_API_URL } else { "http://10.90.0.142:8088/v1/images/generations" }),
   [string]$ImageModel = $(if ($env:IMAGE_MODEL) { $env:IMAGE_MODEL } else { "gpt-image-2" }),
   [string]$ImageApiKey = $env:IMAGE_API_KEY,
-  [string]$ImageSize = $(if ($env:IMAGE_SIZE) { $env:IMAGE_SIZE } else { "1792x1024" }),
+  [string]$ImageSize = $(if ($env:IMAGE_SIZE) { $env:IMAGE_SIZE } else { "1152x576" }),
   [ValidateSet("png", "webp")]
   [string]$ImageOutputFormat = $(if ($env:IMAGE_OUTPUT_FORMAT) { $env:IMAGE_OUTPUT_FORMAT } else { "webp" }),
   [int]$WebpQuality = 90,
@@ -24,6 +26,12 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
+
+if ($UpdateMode -eq "daily") {
+  $Days = 1
+} elseif ($UpdateMode -eq "weekly" -and -not $env:NEWS_UPDATE_DAYS) {
+  $Days = 7
+}
 
 if ($WriteExistingRecords) {
   if (-not (Test-Path -LiteralPath $RecordsJson)) {

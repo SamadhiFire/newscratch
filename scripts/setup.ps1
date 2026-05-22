@@ -1,6 +1,8 @@
 param(
   [string]$GNewsApiKey = $env:GNEWS_API_KEY,
   [string]$LarkCli = $env:LARK_CLI,
+  [ValidateSet("daily", "weekly")]
+  [string]$UpdateMode = $env:NEWS_UPDATE_MODE,
   [string]$ImageApiUrl = $env:IMAGE_API_URL,
   [string]$ImageApiKey = $env:IMAGE_API_KEY,
   [string]$ImageModel = $env:IMAGE_MODEL,
@@ -87,13 +89,19 @@ function Resolve-Python {
   return $null
 }
 
+function Resolve-UpdateDays {
+  param([string]$Mode)
+  if ($Mode -eq "daily") { return 1 }
+  return 7
+}
+
 Write-Host "NewsCatch first-time setup"
 Write-Host ""
 Write-Host "Before continuing, please make sure:"
 Write-Host "  1. larksuite/cli is installed: https://github.com/larksuite/cli"
 Write-Host "  2. lark-cli is logged in and has write access to the target Base."
 Write-Host "  3. You have a free GNews API key from https://gnews.io/."
-Write-Host "  4. If you want image upload, you have an image API URL/key and a Python runtime with Pillow WebP support."
+  Write-Host "  4. If you want image upload, you have an image API URL/key and a Python runtime with Pillow WebP support."
 Write-Host ""
 
 if (-not (Confirm-YesNo -Question "Have you completed the larksuite/cli and GNews prerequisites?")) {
@@ -121,12 +129,33 @@ if (-not $GNewsApiKey) {
 
 $env:GNEWS_API_KEY = $GNewsApiKey
 
+if (-not $UpdateMode) {
+  Write-Host ""
+  Write-Host "Choose your update frequency:"
+  Write-Host "  1. daily  -> fetch the previous 24 hours"
+  Write-Host "  2. weekly -> fetch the previous 7 days"
+  $updateChoice = Read-Host "Enter 1 or 2 (default 2)"
+  if ($updateChoice -eq "1") {
+    $UpdateMode = "daily"
+  } else {
+    $UpdateMode = "weekly"
+  }
+}
+
+$updateDays = Resolve-UpdateDays -Mode $UpdateMode
+$env:NEWS_UPDATE_MODE = $UpdateMode
+$env:NEWS_UPDATE_DAYS = [string]$updateDays
+
 if (-not $NoPersist) {
   [Environment]::SetEnvironmentVariable("GNEWS_API_KEY", $GNewsApiKey, "User")
+  [Environment]::SetEnvironmentVariable("NEWS_UPDATE_MODE", $UpdateMode, "User")
+  [Environment]::SetEnvironmentVariable("NEWS_UPDATE_DAYS", [string]$updateDays, "User")
   Write-Host "Saved GNEWS_API_KEY to your user environment variables."
+  Write-Host "Saved NEWS_UPDATE_MODE=$UpdateMode and NEWS_UPDATE_DAYS=$updateDays to your user environment variables."
   Write-Host "Open a new PowerShell window after setup if another shell cannot see it yet."
 } else {
   Write-Host "Set GNEWS_API_KEY for this PowerShell session only."
+  Write-Host "Set NEWS_UPDATE_MODE=$UpdateMode and NEWS_UPDATE_DAYS=$updateDays for this PowerShell session only."
 }
 
 $resolvedLarkCli = Resolve-LarkCli -PathFromUser $LarkCli
@@ -172,8 +201,8 @@ if (-not $ImageModel -and $ImageApiUrl) {
   $ImageModel = Read-Host "Image model (for example gpt-image-2)"
 }
 if (-not $ImageSize -and $ImageApiUrl) {
-  $ImageSize = Read-Host "Image size (default 1792x1024)"
-  if (-not $ImageSize) { $ImageSize = "1792x1024" }
+  $ImageSize = Read-Host "Image size (default 1152x576)"
+  if (-not $ImageSize) { $ImageSize = "1152x576" }
 }
 if (-not $ImageOutputFormat -and $ImageApiUrl) {
   $ImageOutputFormat = Read-Host "Image output format (png/webp, default webp)"

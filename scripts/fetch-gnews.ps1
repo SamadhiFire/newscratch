@@ -23,6 +23,7 @@ $categories = [ordered]@{
   travel = U "\u65c5\u6e38"
   food = U "\u7f8e\u98df"
   music = U "\u97f3\u4e50"
+  life = U "\u751f\u6d3b"
 }
 
 $requestSpecs = [ordered]@{
@@ -74,6 +75,16 @@ $requestSpecs = [ordered]@{
     @{ type = "search"; q = "band OR orchestra OR composer"; label = "band OR orchestra OR composer" },
     @{ type = "search"; q = "music industry OR record label"; label = "music industry OR record label" }
   )
+  life = @(
+    @{ type = "search"; q = "healthy living OR wellness"; label = "healthy living OR wellness" },
+    @{ type = "search"; q = "superfood OR budget meal OR nutrition"; label = "superfood OR budget meal OR nutrition" },
+    @{ type = "search"; q = "sleep OR stress relief OR mental resilience"; label = "sleep OR stress relief OR mental resilience" },
+    @{ type = "search"; q = "home remedy OR chronic disease advice"; label = "home remedy OR chronic disease advice" },
+    @{ type = "search"; q = "workplace injury OR back pain OR stretching"; label = "workplace injury OR back pain OR stretching" },
+    @{ type = "search"; q = "family life hack OR home cleaning OR household tips"; label = "family life hack OR home cleaning OR household tips" },
+    @{ type = "search"; q = "healthy habit OR daily routine OR self care"; label = "healthy habit OR daily routine OR self care" },
+    @{ type = "search"; q = "consumer health warning OR health scam OR family safety"; label = "consumer health warning OR health scam OR family safety" }
+  )
 }
 
 $backupSpecs = @{
@@ -82,6 +93,7 @@ $backupSpecs = @{
   travel = @{ type = "search"; q = "visa OR passport OR travel policy"; label = "backup: visa OR passport OR travel policy" }
   food = @{ type = "search"; q = "dessert OR vegan food OR organic"; label = "backup: dessert OR vegan food OR organic" }
   music = @{ type = "search"; q = "soundtrack OR score OR music release"; label = "backup: soundtrack OR score OR music release" }
+  life = @{ type = "search"; q = "wellness OR family health OR sleep routine"; label = "backup: wellness OR family health OR sleep routine" }
 }
 
 function New-PlanItem {
@@ -107,9 +119,9 @@ function New-PlanItem {
 
 function New-RequestPlan {
   $plan = @()
-  $cursor = @{ tech = 0; entertainment = 0; travel = 0; food = 0; music = 0 }
-  $seed = @("tech", "entertainment", "entertainment", "travel", "food", "music")
-  $roundRobin = @("tech", "entertainment", "travel", "food", "music")
+  $cursor = @{ tech = 0; entertainment = 0; travel = 0; food = 0; music = 0; life = 0 }
+  $seed = @("tech", "entertainment", "entertainment", "travel", "food", "music", "life")
+  $roundRobin = @("tech", "entertainment", "travel", "food", "music", "life")
   $number = 1
 
   foreach ($key in $seed) {
@@ -354,6 +366,7 @@ $rawByCategory = @{
   travel = @()
   food = @()
   music = @()
+  life = @()
 }
 $requestLog = @()
 

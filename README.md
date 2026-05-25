@@ -148,13 +148,13 @@ $env:PYTHON_EXE = "C:\path\to\python.exe"
 .\scripts\setup.ps1
 ```
 
-## 公司内网运行时的注意事项
+## 私有网络运行时的注意事项
 
 这部分非常重要，尤其是别人照抄仓库时很容易踩坑。
 
 ### 1. GitHub 不一定能直连
 
-如果是在公司网络、办公网络或特定内网环境下：
+如果是在公司网络、办公网络或特定私有网络环境下：
 
 - `github.com:443` 可能被拦截
 - GitHub Desktop 可能无法 `Fetch` / `Push`
@@ -168,27 +168,13 @@ fatal: unable to access 'https://github.com/...': Failed to connect to github.co
 
 通常不是仓库问题，而是当前网络、代理、VPN 或公司出口策略问题。
 
-### 2. 图片接口可能是内网接口
+### 2. 图片接口可能是私有接口
 
-这次我们验证通过的一套公司内网配置是：
-
-```text
-IMAGE_API_URL=http://10.90.0.142:8088/v1/images/generations
-IMAGE_MODEL=gpt-image-2
-IMAGE_SIZE=1152x576
-IMAGE_OUTPUT_FORMAT=webp
-```
-
-但要注意：
-
-- 这是公司内网地址
-- 外部网络不一定能访问
-- 别人拿到仓库后不能默认直接用这组地址
-- 必须使用自己环境里可访问的图片服务
+图片接口地址必须由运行者自己通过 `IMAGE_API_URL` 配置。不要把公司内网地址、个人代理地址或带凭证的地址提交到仓库。
 
 ### 3. 内网图片接口返回格式可能不是 URL
 
-我们已经验证过，公司内网图片接口在成功时可能返回：
+有些图片接口在成功时可能返回：
 
 - `data[0].b64_json`
 
@@ -223,7 +209,7 @@ IMAGE_OUTPUT_FORMAT=webp
 
 ### 5. WebP 转换必须有 Python 运行时
 
-如果别人是在公司内网机器、Windows 机器、受控环境里运行，最容易缺的是：
+如果别人是在公司网络、Windows 机器、受控环境里运行，最容易缺的是：
 
 - 没有 Python
 - Pillow 没装
@@ -265,7 +251,7 @@ IMAGE_OUTPUT_FORMAT=webp
 
 详细字段契约见：
 
-[references/base-schema.md](C:\Users\AS\Desktop\newscatch\references\base-schema.md)
+[references/base-schema.md](references/base-schema.md)
 
 ## 当前主流程
 

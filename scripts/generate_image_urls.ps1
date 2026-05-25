@@ -5,7 +5,7 @@ param(
   [string]$OutputJson = ".\processed\records.with-images.json",
   [string]$SummaryJson = ".\processed\image-generation-summary.json",
   [string]$OutputImageDir = ".\processed\generated-images",
-  [string]$ImageApiUrl = $(if ($env:IMAGE_API_URL) { $env:IMAGE_API_URL } else { "http://10.90.0.142:8088/v1/images/generations" }),
+  [string]$ImageApiUrl = $env:IMAGE_API_URL,
   [string]$ImageModel = $(if ($env:IMAGE_MODEL) { $env:IMAGE_MODEL } else { "gpt-image-2" }),
   [string]$ImageApiKey = $env:IMAGE_API_KEY,
   [string]$ImageSize = $(if ($env:IMAGE_SIZE) { $env:IMAGE_SIZE } else { "1152x576" }),
@@ -75,7 +75,6 @@ function Resolve-PythonExecutable {
   $candidates = @()
   if ($ExplicitPath) { $candidates += $ExplicitPath }
   $candidates += @(
-    "C:\Users\AS\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
     "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
   ) | Where-Object { $_ }
@@ -190,6 +189,10 @@ print(dst)
 
 if (-not (Test-Path -LiteralPath $InputJson)) {
   throw "Input JSON not found: $InputJson"
+}
+
+if (-not (Test-HttpUrl -Value $ImageApiUrl)) {
+  throw "Image API URL is required. Set IMAGE_API_URL or pass -ImageApiUrl with an http/https endpoint."
 }
 
 $records = Get-Content -LiteralPath $InputJson -Raw -Encoding UTF8 | ConvertFrom-Json

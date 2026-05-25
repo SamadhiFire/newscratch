@@ -72,8 +72,7 @@ function Resolve-Python {
 
   $candidates = @(
     "python",
-    "py",
-    "C:\Users\AS\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    "py"
   )
 
   foreach ($candidate in $candidates) {

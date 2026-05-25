@@ -1,5 +1,5 @@
 param(
-  [string]$ImageApiUrl = "http://10.90.0.142:8088/v1/images/generations",
+  [string]$ImageApiUrl = $env:IMAGE_API_URL,
   [string]$ImageApiKey = $env:IMAGE_API_KEY,
   [string]$ImageModel = "gpt-image-2",
   [string]$ImageSize = "1536x1024",
@@ -7,6 +7,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $ImageApiUrl -or $ImageApiUrl -notmatch "^https?://") {
+  throw "Image API URL is required. Set IMAGE_API_URL or pass -ImageApiUrl."
+}
 
 $headers = @{
   "Content-Type" = "application/json"

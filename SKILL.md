@@ -9,12 +9,15 @@ Use this skill for the NewsCatch pipeline:
 
 GNews fetch -> deterministic filtering and scoring -> model-written publication copy -> image generation -> local WebP conversion -> Feishu/Lark Base record creation -> Feishu attachment upload.
 
-Important boundary: scripts do **not** write the final optimized title or body. The model must generate `generatedTitle`, `body`, and `imagePrompt` from the selected source material. Scripts handle repeatable plumbing.
+Important boundary: deterministic scripts do **not** template the final optimized title or body. The model must generate `generatedTitle`, `body`, and `imagePrompt` from the selected source material. `scripts/generate_records_newapi.ps1` may call a configured model API to perform that model generation, then writes the normalized JSON.
 
 ## Defaults
 
 - GNews key: use `GNEWS_API_KEY` or pass `-ApiKey`
 - Lark CLI: use `lark-cli` on `PATH` or set `LARK_CLI`
+- Text API base: use `TEXT_API_BASE`, default `https://newapi.860812.xyz`
+- Text API key: use `TEXT_API_KEY` or `IMAGE_API_KEY`
+- Text model: use `TEXT_MODEL`, default `gpt-5.4-mini`
 - Image API URL: use `IMAGE_API_URL`
 - Image API key: use `IMAGE_API_KEY`
 - Image model: use `IMAGE_MODEL`, default `gpt-image-2`
@@ -40,6 +43,13 @@ Then run:
 .\scripts\setup.ps1
 ```
 
+If Windows blocks script execution with an ExecutionPolicy error, run the same
+script through PowerShell with a process-local bypass:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+```
+
 ## Normal Workflow
 
 1. Fetch and pre-filter source articles:
@@ -63,6 +73,12 @@ Read `references/base-schema.md` first. For each selected item:
 - write a formal English `body`
 - write an editorial `imagePrompt`
 - set `generatedBy` to exactly `model`
+
+If automated model generation is configured, run:
+
+```powershell
+.\scripts\generate_records_newapi.ps1
+```
 
 3. Dry-run image generation and payload creation:
 
@@ -93,6 +109,7 @@ This step creates the records and uploads the generated local image files to the
 - `scripts/setup.ps1`: environment setup and local config persistence
 - `scripts/fetch-gnews.ps1`: GNews API calls, dedupe, blacklist, and filtered output
 - `scripts/score-and-select.ps1`: deterministic scoring and top selection
+- `scripts/generate_records_newapi.ps1`: optional model API calls that create `generatedTitle`, `body`, and `imagePrompt`
 - `scripts/generate_image_urls.ps1`: image API calls, `b64_json` decode, and optional PNG -> WebP conversion
 - `scripts/write_lark_records.ps1`: validate records, create Base rows, and upload attachment files
 - `scripts/run_pipeline.ps1`: orchestrate fetch/select and image/write stages

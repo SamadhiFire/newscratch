@@ -89,8 +89,11 @@ $env:LARK_CLI = "C:\path\to\lark-cli.ps1"
 你至少需要自己配置：
 
 ```powershell
-$env:IMAGE_API_URL = "你的图片接口地址"
-$env:IMAGE_API_KEY = "你的图片接口 Key"
+$env:TEXT_API_BASE = "https://newapi.860812.xyz"
+$env:TEXT_API_KEY = "你的 newapi Key"
+$env:TEXT_MODEL = "gpt-5.4-mini"
+$env:IMAGE_API_URL = "https://newapi.860812.xyz/v1/images/generations"
+$env:IMAGE_API_KEY = "你的 newapi Key"
 $env:IMAGE_MODEL = "gpt-image-2"
 $env:IMAGE_SIZE = "1152x576"
 ```
@@ -134,7 +137,10 @@ $env:IMAGE_OUTPUT_FORMAT = "png"
 ```powershell
 $env:GNEWS_API_KEY = "..."
 $env:LARK_CLI = "C:\path\to\lark-cli.ps1"
-$env:IMAGE_API_URL = "http://host:port/v1/images/generations"
+$env:TEXT_API_BASE = "https://newapi.860812.xyz"
+$env:TEXT_API_KEY = "..."
+$env:TEXT_MODEL = "gpt-5.4-mini"
+$env:IMAGE_API_URL = "https://newapi.860812.xyz/v1/images/generations"
 $env:IMAGE_API_KEY = "..."
 $env:IMAGE_MODEL = "gpt-image-2"
 $env:IMAGE_SIZE = "1152x576"
@@ -146,6 +152,12 @@ $env:PYTHON_EXE = "C:\path\to\python.exe"
 
 ```powershell
 .\scripts\setup.ps1
+```
+
+如果 Windows 提示禁止运行脚本，可以只对当前命令使用临时绕过：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
 ```
 
 ## 私有网络运行时的注意事项
@@ -270,7 +282,7 @@ fatal: unable to access 'https://github.com/...': Failed to connect to github.co
 
 ### 第二步：让模型生成 `records.normalized.json`
 
-脚本不会自动生成最终文章正文。
+默认情况下，确定性脚本不会用模板自动生成最终文章正文；最终内容必须由模型生成。
 
 需要模型根据：
 
@@ -286,6 +298,12 @@ fatal: unable to access 'https://github.com/...': Failed to connect to github.co
 - `body`
 - `imagePrompt`
 - `generatedBy = model`
+
+如果已经配置 `TEXT_API_BASE` / `TEXT_API_KEY`，可以用 newapi 自动调用模型生成：
+
+```powershell
+.\scripts\generate_records_newapi.ps1
+```
 
 ### 第三步：生成图片并 dry-run
 

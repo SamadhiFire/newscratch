@@ -1,148 +1,140 @@
 ---
-name: gnews-to-lark-base
-description: "Use when the user wants to fetch international news with GNews API, filter and score the previous 7 days of articles, use the model to rewrite selected items into publishable English headlines, bodies, and image prompts, generate images, convert them to WebP, and write finished records into the configured Feishu/Lark Base table."
+name: spaceplayax-content-batch
+description: "Use when the user wants to build a Spaceplayax content batch zip containing multiple Markdown articles, regenerated WebP cover images, per-post manifests, and a batch manifest. The skill should call the local batch builder instead of publishing to Feishu/Lark."
 ---
 
-# GNews To Lark Base
+# Spaceplayax Content Batch
 
-Use this skill for the NewsCatch pipeline:
+Use this skill when the user wants a local content package named:
 
-GNews fetch -> deterministic filtering and scoring -> model-written publication copy -> image generation -> local WebP conversion -> Feishu/Lark Base record creation -> Feishu attachment upload.
-
-Important boundary: deterministic scripts do **not** template the final optimized title or body. The model must generate `generatedTitle`, `body`, and `imagePrompt` from the selected source material. `scripts/generate_records_newapi.ps1` may call a configured model API to perform that model generation, then writes the normalized JSON.
-
-## Defaults
-
-- GNews key: use `GNEWS_API_KEY` or pass `-ApiKey`
-- Lark CLI: use `lark-cli` on `PATH` or set `LARK_CLI`
-- Text API base: use `TEXT_API_BASE`, default `https://newapi.860812.xyz`
-- Text API key: use `TEXT_API_KEY` or `IMAGE_API_KEY`
-- Text model: use `TEXT_MODEL`, default `gpt-5.4-mini`
-- Image API URL: use `IMAGE_API_URL`
-- Image API key: use `IMAGE_API_KEY`
-- Image model: use `IMAGE_MODEL`, default `gpt-image-2`
-- Image size: use `IMAGE_SIZE`, default `1152x576`
-- Image output format: use `IMAGE_OUTPUT_FORMAT`, default `webp`
-- Python runtime for WebP conversion: use `PYTHON_EXE` or ensure `python` is available
-- Base token: `ZpWrbn0M9ajJn8s6qDycQhDWnsN`
-- Table id: `tblIDJ3Nv9Q2roXL`
-- View id: `vewwG9FgZu`
-
-## First-Time Setup
-
-Before running:
-
-1. Install [larksuite/cli](https://github.com/larksuite/cli), log in, and make sure your account can write to the target Base.
-2. Get a GNews API key.
-3. Prepare an image API that accepts prompt-based image generation.
-4. Make sure Python with Pillow WebP support is available if you want `webp` output.
-
-Then run:
-
-```powershell
-.\scripts\setup.ps1
+```text
+spaceplayax-content-batch-YYYY-MM-DD.zip
 ```
 
-If Windows blocks script execution with an ExecutionPolicy error, run the same
-script through PowerShell with a process-local bypass:
+The output zip must contain exactly one top-level directory:
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+```text
+spaceplayax-content-batch-YYYY-MM-DD/
+  batch-manifest.json
+  posts/
+    YYYY-MM-DD-slug/
+      manifest.json
+      article.md
+      images/
+        cover.webp
 ```
 
-## Normal Workflow
+## Core Boundary
 
-1. Fetch and pre-filter source articles:
+This is no longer a Feishu/Lark publishing workflow.
 
-```powershell
-.\scripts\run_pipeline.ps1
-```
+The model may generate article text, metadata, and image prompts through a configured text API, but the final directory layout, image files, manifests, zip creation, and validation must be handled by local deterministic tooling.
 
-This creates:
+Do not manually create images one by one. Use the local batch builder so the run can resume, retry failed image requests, and validate the package.
 
-- `processed/filtered_articles.json`
-- `processed/generation-input.json`
-- `processed/fetch-summary.json`
-- `processed/score-summary.json`
+For cross-platform use, prefer PowerShell 7 via `pwsh -File ...`. Do not assume Windows-only path separators or the `py` launcher exists.
 
-2. Use the model to create `records.normalized.json` from `processed/generation-input.json`.
+## Main Command
 
-Read `references/base-schema.md` first. For each selected item:
-
-- write a rewritten English `generatedTitle`
-- write a formal English `body`
-- write an editorial `imagePrompt`
-- set `generatedBy` to exactly `model`
-
-If automated model generation is configured, run:
+Build a batch from an article JSON file:
 
 ```powershell
-.\scripts\generate_records_newapi.ps1
+pwsh -File ./scripts/build_spaceplayax_batch.ps1 -InputJson ./records.normalized.json -Date 2026-05-26 -Workers 3 -Resume
 ```
 
-3. Dry-run image generation and payload creation:
+The builder will:
 
-```powershell
-.\scripts\run_pipeline.ps1 -WriteExistingRecords
-```
+- Create `dist/spaceplayax-content-batch-YYYY-MM-DD/`
+- Create one `posts/YYYY-MM-DD-slug/` folder per article
+- Write each `article.md` without frontmatter
+- Write each per-post `manifest.json`
+- Regenerate one `images/cover.webp` per article
+- Write `batch-manifest.json`
+- Create `dist/spaceplayax-content-batch-YYYY-MM-DD.zip`
+- Validate that the zip has exactly one top-level directory
 
-This step:
+## Inputs
 
-- calls the configured image API
-- accepts `data[0].url` or `data[0].b64_json`
-- when `b64_json` is returned, saves a local image file
-- converts it to WebP by default
-- writes `processed/records.with-images.json`
-- writes `processed/image-generation-summary.json`
-- writes `lark-batch-create.json`
+The builder accepts a JSON array. It works with `records.normalized.json` produced by the legacy scripts, or an equivalent `articles.json`.
 
-4. Publish only after review:
+Recommended fields per article:
 
-```powershell
-.\scripts\run_pipeline.ps1 -WriteExistingRecords -Publish
-```
+- `generatedTitle` or `title`
+- `body`, `bodyMarkdown`, or `articleMarkdown`
+- `imagePrompt`
+- `category`
+- `sourceUrl`
+- `sourceTitle`
+- `sourceName`
+- `publishedAt`
+- `slug` optional; when missing, the builder creates one
 
-This step creates the records and uploads the generated local image files to the Feishu attachment field `图片`.
+## Environment
 
-## Script Responsibilities
+Do not commit keys or local paths. Configure secrets via environment variables or pass parameters at runtime.
 
-- `scripts/setup.ps1`: environment setup and local config persistence
-- `scripts/fetch-gnews.ps1`: GNews API calls, dedupe, blacklist, and filtered output
-- `scripts/score-and-select.ps1`: deterministic scoring and top selection
-- `scripts/generate_records_newapi.ps1`: optional model API calls that create `generatedTitle`, `body`, and `imagePrompt`
-- `scripts/generate_image_urls.ps1`: image API calls, `b64_json` decode, and optional PNG -> WebP conversion
-- `scripts/write_lark_records.ps1`: validate records, create Base rows, and upload attachment files
-- `scripts/run_pipeline.ps1`: orchestrate fetch/select and image/write stages
+Required for image generation:
 
-## Model Generation Rules
+- `IMAGE_API_URL`, for example `https://newapi.860812.xyz/v1/images/generations`
+- `IMAGE_API_KEY`
+- `IMAGE_MODEL`, default `gpt-image-2`
+- `IMAGE_SIZE`, default `1152x576`
+- `PYTHON_EXE` pointing to Python with Pillow WebP support, or make `python3`/`python` available on `PATH`
 
-For each item in `processed/generation-input.json`:
+Optional for upstream text/article generation:
 
-- Use `sourceTitle`, `sourceDescription`, `sourceBody`, `sourceName`, `publishedAt`, and `sourceUrl`
-- Preserve factual accuracy
-- Do not invent facts, quotes, numbers, dates, places, or outcomes
-- Rewrite the headline from scratch
-- Write a standalone formal English news article
-- Keep body length between 700 and 900 words, approximately 3,500-5,000 characters
-- Generate an editorial image prompt with no text, no watermark, and no logo
+- `TEXT_API_BASE`, for example `https://newapi.860812.xyz`
+- `TEXT_API_KEY`
+- `TEXT_MODEL`, for example `gpt-5.4-mini`
 
-## Feishu Write Rules
+## Scaling Rules
 
-`write_lark_records.ps1` rejects records when:
+For about 100 articles per day:
 
-- `generatedTitle`, `body`, or `imagePrompt` is missing
-- `generatedBy` is missing or not exactly `model`
-- `generatedTitle` is longer than 90 characters or appears truncated
-- `body` is outside the accepted length range
-- `body` starts like an internal summary
-- `body` still contains source truncation markers
-- `generatedImageUrl` is present but not a valid `http/https` URL
+- Start with `-Workers 3`
+- Increase to `-Workers 5` only if the image API is stable
+- Always use `-Resume` for long runs
+- Keep generated files on disk; reruns skip existing valid `cover.webp` files
+- Treat image failures as batch failures unless the user explicitly asks for a partial batch
 
-When a generated local image file exists in `generatedImagePath`, the writer uploads that file into Feishu field `图片` after the record is created.
+The local machine is not doing the heavy image computation. It is coordinating API calls, saving files, converting to WebP, and building the zip. The practical limits are image API speed, rate limits, network stability, and cost.
 
-## Notes
+## Validation Requirements
 
-- Do not commit keys, tokens, or local machine paths to Git.
-- Prefer environment variables over hard-coded values.
-- Image generation may succeed even when no remote URL is returned. In that case, `generatedImagePath` becomes the important output.
-- Do not claim that an image was attached unless the attachment upload step actually succeeded.
+Before reporting success, verify:
+
+- The zip filename is `spaceplayax-content-batch-YYYY-MM-DD.zip`
+- The zip has exactly one top-level directory
+- Every post is under `posts/YYYY-MM-DD-slug/`
+- Every post contains `manifest.json`
+- Every post contains `article.md`
+- Every post contains `images/cover.webp`
+- Every cover file is valid WebP
+- `article.md` has no frontmatter
+- `batch-manifest.json` lists the included posts
+
+`build_spaceplayax_batch.ps1` performs these checks and fails before zipping when files are missing or invalid.
+
+## Legacy Scripts
+
+Some older NewsCatch scripts are still useful for preparing article input:
+
+- `scripts/fetch-gnews.ps1`
+- `scripts/score-and-select.ps1`
+- `scripts/generate_records_newapi.ps1`
+- `scripts/merge_generated_records.ps1`
+
+Do not use the legacy Feishu writer as the main path for Spaceplayax batches:
+
+- `scripts/write_lark_records.ps1`
+- `scripts/run_pipeline.ps1 -WriteExistingRecords -Publish`
+
+## Failure Handling
+
+If a run fails:
+
+1. Check `dist/spaceplayax-content-batch-YYYY-MM-DD-build-summary.json`
+2. Fix environment, API, or content issues
+3. Rerun the same command with `-Resume`
+
+Do not delete the partially built batch directory unless the user explicitly wants a clean rebuild.

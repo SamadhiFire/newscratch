@@ -1,8 +1,10 @@
 # Runtime data - regenerate on each run
 data/
 processed/
+dist/
 lark-batch-create.json
 records.normalized.json
+spaceplayax-content-batch-*.zip
 
 # WorkBuddy internal data
 .workbuddy/

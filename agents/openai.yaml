@@ -1,3 +1,3 @@
-display_name: GNews To Lark Base
-short_description: Fetch and score GNews articles, use the model to write publishable English copy, and write finished records to Feishu Base.
-default_prompt: Fetch the previous 7 days of GNews articles for 科技AI, 娱乐体育, 旅游, 美食, 音乐, and 生活. Use the scripts to fetch/filter/score/select, then use the model to generate records.normalized.json with rewritten English headlines, 700-900 word formal English news bodies, and 16:9 image prompts. The scripts will generate image URLs from imagePrompt before dry-run or publish to the configured Feishu Base.
+display_name: Spaceplayax Content Batch
+short_description: Build a Spaceplayax content batch zip with Markdown articles, regenerated WebP covers, per-post manifests, and one batch manifest.
+default_prompt: Build a Spaceplayax content batch zip from the prepared article JSON. Invoke pwsh -File ./scripts/build_spaceplayax_batch.ps1 with regenerated WebP cover images, resume enabled, and a conservative worker count. Validate that the zip contains exactly one top-level directory and that every post has manifest.json, article.md, and images/cover.webp. Do not publish to Feishu or Lark.
